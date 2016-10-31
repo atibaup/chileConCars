@@ -7,18 +7,19 @@ mozillaMacUserAgent <- paste("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)",
                              "AppleWebKit/534.30 (KHTML, like Gecko)", 
                              "Chrome/12.0.742.112 Safari/534.30", sep='')
 
-currentChpToUsd = 0.0015
+currentChpToUsd = 0.00152898
 
 getHtmlDocument <- function(url, userAgent = mozillaMacUserAgent) {
   h <- new_handle()
   handle_setheaders(h, "User-Agent" = userAgent)
-  req <- curl_fetch_memory(url, handle=h)
+  encodedUrl <- URLencode(url)
+  req <- curl_fetch_memory(encodedUrl, handle=h)
   if (req$status_code == 200) {
     html <- read_html(req$content)
     handle_reset(h)
     return(html)
   } else {
-    warning(paste("Trying to fetch", url, "returned status:", req$status_code))
+    warning(paste("Trying to fetch", encodedUrl, "returned status:", req$status_code))
   }
 }
 
@@ -168,11 +169,11 @@ getChileautosURLList <- function(chileautosResultPageUrl) {
 getChileautosCarFeatures <- function(caCarPageUrl) {
   carPageHtml <- getHtmlDocument(caCarPageUrl) 
   rows <- carPageHtml %>% html_nodes("tr")
-  title <- NULL
-  km <- NULL
-  year <- NULL
-  transmission <- NULL
-  fuel <- NULL
+  title <- NA
+  km <- NA
+  year <- NA
+  transmission <- NA
+  fuel <- NA
   for (row in rows) {
     cols <- row %>% html_nodes("td")
     name <- try(cols %>% .[[1]] %>% html_text(), silent = TRUE)
@@ -259,7 +260,7 @@ cleanCaCarsDataframe <- function(carsDataFrame, chpToUsd) {
   return(carsDataFrame)
 }
 
-getCleanChileautosCarsDataframe <- function(caResultPageUrl, maxResults = 5, sleepTime = 0.5, chpToUsd = currentChpToUsd) {
+getCleanChileautosCarsDataframe <- function(caResultPageUrl, maxResults = NULL, sleepTime = 0.5, chpToUsd = currentChpToUsd) {
   carsDataFrame <- getChileautoCarsDataFrame(caResultPageUrl, maxResults, sleepTime)
   return(cleanCaCarsDataframe(carsDataFrame, chpToUsd))
 }
@@ -274,7 +275,7 @@ getChileautosCarsDataFrameForModel <- function(modelInfo) {
   pageNumber <- 1
   carData <- NULL
   newPageData <- getCleanChileautosCarsDataframe(getListUrl(pageNumber))
-  while (TRUE) {
+  while (pageNumber < 100) { #safegard
     pageNumber <- pageNumber + 1 
     if (is.null(carData)) {
       carData <- newPageData
@@ -285,8 +286,10 @@ getChileautosCarsDataFrameForModel <- function(modelInfo) {
     newPageData <- getCleanChileautosCarsDataframe(getListUrl(pageNumber))
     # Chileautos returns last results even if page number is larger than largest page number.
     # This hack stops the page number addition once the results are the same as for the last page number.
-    if (all(lastPageData$URL == newPageData$URL)) {
-      break
+    if (length(lastPageData$URL) == length(newPageData$URL)) {
+      if (all(lastPageData$URL == newPageData$URL)) {
+        break
+      }
     }
   }
   carData$make <- modelInfo$make
