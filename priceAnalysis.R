@@ -5,11 +5,11 @@ require(ggplot2)
 require(gridExtra)
 require(lme4)
 
-yapoData <- read.csv("data/yapoData.csv")
+yapoData <- read.csv("data/yapoData.csv", stringsAsFactors = FALSE)
 yapoData$X <- NULL
 yapoData$source <- "Yapo"
 
-chileautosData <- read.csv("data/chileautosData.csv")
+chileautosData <- read.csv("data/chileautosData.csv", stringsAsFactors = FALSE)
 chileautosData$X <- NULL
 chileautosData$source <- "Chileautos"
 
@@ -138,7 +138,7 @@ marrangeGrob(grobs = as.list(model.plots),
 #
 
 # price  ~ Age
-fit.mem3 = lmer(log10(Precio.USD) ~ 1 + Edad + Kilómetros.miles +  (1 + Edad | model), cleanCarData)
+fit.mem3 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + Edad + Kilómetros.miles +  (1 + Edad | model), cleanCarData)
 print(summary(fit.mem3))
 mem.coefs3 = coef(fit.mem3)$model
 depr.estimates = data.frame(model = rownames(mem.coefs3), 
@@ -176,7 +176,7 @@ print(plt)
 #
 
 # Kilómetros  ~ Age | model
-fit.km.vs.age = lmer(Kilómetros.miles ~ 1 + Edad +  +  (1 + Edad | model), cleanCarData)
+fit.km.vs.age = lmer(Kilómetros.miles ~ 1 + Edad + (1 + Edad | model), cleanCarData)
 print(summary(fit.km.vs.age))
 save(fit.km.vs.age, file = "data/fittedKmVsAge.RData")
 

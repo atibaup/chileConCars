@@ -1,0 +1,165 @@
+# Copyright 2016 - Arnau Tibau-Puig
+# This program is distributed under a GNU General Public License 
+#
+# This is a Shiny web application. You can run the application by clicking
+# the 'Run App' button above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+
+library(shiny)
+source("../scrapingLib.R")
+load("../data/fittedLmer.RData")
+load("../data/fittedKmVsAge.RData")
+
+yapoData <- read.csv("../data/yapoData.csv", stringsAsFactors = FALSE))
+yapoData$X <- NULL
+
+chileautosData <- read.csv("../data/chileautosData.csv", stringsAsFactors = FALSE)
+chileautosData$X <- NULL
+
+GLOBAL.CACHE <- rbind(yapoData, chileautosData)
+
+getYapoCarsByFilter <- function(filter = list(), modelInfos = yapoBrandModelCodes, updateProgress = NULL) {
+  yapoCarData <- NULL
+  for (modelInfo in modelInfos) {
+    if (is.function(updateProgress)) {
+      text <- sprintf("Fetching Yapo data for %s %s", modelInfo$make, modelInfo$model)
+      updateProgress(detail = text)
+    }
+    newData <- getYapoCarsDataFrameForModel(modelInfo, filter, cache = GLOBAL.CACHE)
+    yapoCarData <- assignOrRbind(yapoCarData, newData)
+  }
+  if (length(yapoCarData) > 0) {
+    return(yapoCarData)
+  } else {
+    return(NULL)
+  }
+}
+
+getChileautosCarsByFilter <- function(filter = list(), modelInfos = chileautosBrandModelCodes, updateProgress = NULL) {
+  chileautosCarData <- NULL
+  for (modelInfo in chileautosBrandModelCodes) {
+    if (is.function(updateProgress)) {
+      text <- sprintf("Fetching Chileautos data for %s %s", modelInfo$make, modelInfo$model)
+      updateProgress(detail = text)
+    }    
+    newData <- getChileautosCarsDataFrameForModel(modelInfo, filter, cache = GLOBAL.CACHE)
+    chileautosCarData <- assignOrRbind(chileautosCarData, newData)
+  }
+  if (length(chileautosCarData) > 0) {
+    return(chileautosCarData)
+  } else {
+    NULL
+  }
+}
+
+getCarsByBudget <- function(budgetMin, budgetMax, updateProgress = NULL) {
+  filter <- list(maxPrice = budgetMax / CHP2USD, 
+                 minPrice = budgetMin / CHP2USD)
+  
+  yapoData <- getYapoCarsByFilter(filter, updateProgress = updateProgress)
+  chileautosCarData <- getChileautosCarsByFilter(filter, updateProgress = updateProgress)
+  
+  if (!is.null(yapoData) & !is.null(chileautosCarData)) {
+    carData <- rbind(yapoData, chileautosCarData)
+  } else if (!is.null(yapoData)) {
+    carData <- yapoData
+  } else if (!is.null(chileautosData)) {
+    carData <- chileautosCarData
+  } else {
+    carData <- NULL
+  }
+  return(carData)
+}
+
+getCarsByBudgetRanked <- function(budgetMin, budgetMax, fitted.lmer, updateProgress = NULL) {
+  carsByBudget <- getCarsByBudget(budgetMin, budgetMax, updateProgress)
+  if (!is.null(carsByBudget)) {
+    # Impute mileages that are missing or aberrant
+    missingOrAberrant <- with(carsByBudget, is.na(Kilómetros) | Kilómetros == 0)
+    carsByBudget$Kilómetros.miles[missingOrAberrant] <- predict(fit.km.vs.age, newData = carsByBudget[missingOrAberrant, ])
+    carsByBudget$Precio.USD.Predicted <- 10^predict(fitted.lmer, newdata = carsByBudget)
+    createURL.link = function(rowID) {
+      sprintf("<a href=%s target=\"_blank\">%s %s</a>", carsByBudget[rowID, ]$URL, carsByBudget[rowID, ]$make, carsByBudget[rowID, ]$model)
+    }
+    carsByBudget$URL.link = sapply(rownames(carsByBudget), createURL.link)
+    #btsrp <- bootMer(fitted.lmer, function(x) 10^predict(x, newdata = carsByBudget), nsim = 100)
+    #carsByBudget$Precio.USD.Predicted1stQ <- apply(btsrp$t, 2, function(x) quantile(x, 0.25, na.rm=TRUE))
+    carsByBudget$Ganga <- carsByBudget$Precio.USD.Predicted - carsByBudget$Precio.USD
+    sortedCarsByBudget <- carsByBudget[with(carsByBudget, order(-Ganga)), ]
+    return(sortedCarsByBudget)
+  } else {
+    return(NULL)
+  }
+}
+
+# Define UI for application that draws a histogram
+ui <- shinyUI(fluidPage(
+   
+   # Application title
+   titlePanel("ChileConCars"),
+   
+   sidebarLayout(
+      sidebarPanel(
+        #textInput('budget', "Input your budget in USD", value = "5000"),
+        sliderInput("range", 
+                    label = "Budget range:",
+                    min = 0, max = 15000, value = c(7000, 8000),
+                    step = 500, round = TRUE),
+        sliderInput("kmRange", 
+                    label = "Kilometers range:",
+                    min = 0, max = 500000, value = c(100000, 200000),
+                    step = 10000, round = TRUE),
+        sliderInput("yearRange", 
+                    label = "Year range:",
+                    min = 1990, max = getCurrentYear(), value = c(2000, 2010),
+                    step = 1, round = TRUE),
+        submitButton("Get cars!")
+      ),
+      
+      mainPanel(
+        dataTableOutput('table')
+      )
+   )
+))
+
+# Define server logic required to draw a histogram
+server <- shinyServer(function(input, output) {
+   output$table <- renderDataTable({
+     # Create a Progress object
+     progress <- shiny::Progress$new()
+     progress$set(message = "Fetching data", value = 0)
+     # Close the progress when this reactive exits (even if there's an error)
+     on.exit(progress$close())
+     
+     # Create a callback function to update progress.
+     # Each time this is called:
+     # - If `value` is NULL, it will move the progress bar 1/5 of the remaining
+     #   distance. If non-NULL, it will set the progress to that value.
+     # - It also accepts optional detail text.
+     updateProgress <- function(value = NULL, detail = NULL) {
+       if (is.null(value)) {
+         value <- progress$getValue()
+         value <- value + (progress$getMax() - value) / 5
+       }
+       progress$set(value = value, detail = detail)
+     }
+     
+     ranking <- getCarsByBudgetRanked(budgetMin = as.numeric(input$range[1]), 
+                                      budgetMax = as.numeric(input$range[2]), 
+                                      fit.mem3, 
+                                      updateProgress = updateProgress)
+
+     ranking <- subset(ranking, Año >= as.numeric(input$yearRange[1]) & Año <= as.numeric(input$yearRange[2]))
+     ranking <- subset(ranking, Kilómetros >= as.numeric(input$kmRange[1]) & Kilómetros <= as.numeric(input$kmRange[2]))
+    
+     ranking[, c( "URL.link", "Año", "Kilómetros", "Precio.USD", "Nombre", "Fecha", "Ganga")]
+   }, escape = FALSE)
+})
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+

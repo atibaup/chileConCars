@@ -20,7 +20,7 @@ dataFile <- paste(dataFolder, "/", opts$o, sep = '')
 
 if (opts$update & file.exists(dataFile)) {
   print(sprintf("Running in update mode, using data in %s", dataFile))
-  existingData <- read.csv(dataFile)
+  existingData <- read.csv(dataFile, stringsAsFactors = FALSE)
 } else {
   existingData <- NULL
 }
