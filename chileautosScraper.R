@@ -1,17 +1,35 @@
-# Copyright 2016 - Arnau Tibau-Puig
-# This program is distributed under a GNU General Public License 
+#!/usr/bin/env Rscript
+'Usage:
+   chileautosScraper.R [-f <data folder> -o <output filename> --update]
 
-chileautosBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeCode = 4, modelCode = '4Runner'),
-                         list(make = 'Toyota', model = 'LandCruiser', makeCode = 4, modelCode = 'Land Cruiser'),
-                         list(make = 'Nissan', model = 'Pathfinder', makeCode = 17, modelCode = 'Pathfinder'),
-                         list(make = 'Nissan', model = 'X-Trail', makeCode = 17, modelCode = 'X-Trail'),
-                         list(make = 'Mitsubishi', model = 'Montero', makeCode = 3, modelCode = 'Montero'),
-                         list(make = 'Suzuki', model = 'GrandVitara', makeCode = 9, modelCode = 'Grand Vitara'))
+Copyright 2016 - Arnau Tibau-Puig
+This program is distributed under a GNU General Public License 
+
+Options:
+  -o Output file [default: chileautosData.csv]
+  -f Output folder [default: data] 
+  -u Update only [default: FALSE]
+ ]' -> doc
+
+require(docopt)
+source("scrapingLib.R")
+
+opts <- docopt(doc)
+
+dataFolder <- opts$f
+dataFile <- paste(dataFolder, "/", opts$o, sep = '')
+
+if (opts$update & file.exists(dataFile)) {
+  print(sprintf("Running in update mode, using data in %s", dataFile))
+  existingData <- read.csv(dataFile)
+} else {
+  existingData <- NULL
+}
 
 carData <- NULL
 for (modelInfo in chileautosBrandModelCodes) {
   print(sprintf("Fetching data for %s %s", modelInfo$make, modelInfo$model))
-  newData <- getChileautosCarsDataFrameForModel(modelInfo)
+  newData <- getChileautosCarsDataFrameForModel(modelInfo, cache = existingData)
   if (is.null(carData)) {
     carData <- newData
   } else {
@@ -19,4 +37,7 @@ for (modelInfo in chileautosBrandModelCodes) {
   }
 }
 
-write.csv(carData, file = "chileautosData.csv")
+if (!dir.exists(dataFolder)) {
+  dir.create(dataFolder)
+}
+write.csv(carData, file = dataFile)

@@ -1,17 +1,34 @@
-# Copyright 2016 - Arnau Tibau-Puig
-# This program is distributed under a GNU General Public License 
+#!/usr/bin/env Rscript
+'Usage:
+   yapoScraper.R [--update] [-f <data folder> -o <output filename>]
 
-yapoBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeCode = 88, modelCode = 1),
-                         list(make = 'Toyota', model = 'LandCruiser', makeCode = 88, modelCode = 15),
-                         list(make = 'Nissan', model = 'Pathfinder', makeCode = 64, modelCode = 30),
-                         list(make = 'Nissan', model = 'X-Trail', makeCode = 64, modelCode = 45),
-                         list(make = 'Mitsubishi', model = 'Montero', makeCode = 62, modelCode = 11),
-                         list(make = 'Suzuki', model = 'GrandVitara', makeCode = 86, modelCode = 15))
+Copyright 2016 - Arnau Tibau-Puig
+This program is distributed under a GNU General Public License 
+
+Options:
+  -o <output filename> Output file [default: yapoData.csv]
+  -f <data folder> Output folder [default: data] 
+ ]' -> doc
+
+require(docopt)
+source("scrapingLib.R")
+
+opts <- docopt(doc)
+
+dataFolder <- opts$f
+dataFile <- paste(dataFolder, "/", opts$o, sep = '')
+
+if (opts$update & file.exists(dataFile)) {
+  print(sprintf("Running in update mode, using data in %s", dataFile))
+  existingData <- read.csv(dataFile)
+} else {
+  existingData <- NULL
+}
 
 carData <- NULL
 for (modelInfo in yapoBrandModelCodes) {
   print(sprintf("Fetching data for %s %s", modelInfo$make, modelInfo$model))
-  newData <- getYapoCarsDataFrameForModel(modelInfo)
+  newData <- getYapoCarsDataFrameForModel(modelInfo, cache = existingData)
   if (is.null(carData)) {
     carData <- newData
   } else {
@@ -19,4 +36,7 @@ for (modelInfo in yapoBrandModelCodes) {
   }
 }
 
-write.csv(carData, file = "yapoData.csv")
+if (!dir.exists(dataFolder)) {
+  dir.create(dataFolder)
+}
+write.csv(carData, file = dataFile)

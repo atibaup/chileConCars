@@ -1,15 +1,15 @@
 # Copyright 2016 - Arnau Tibau-Puig
 # This program is distributed under a GNU General Public License 
-
+source("scrapingLib.R")
 require(ggplot2)
 require(gridExtra)
 require(lme4)
 
-yapoData <- read.csv("yapoData.csv")
+yapoData <- read.csv("data/yapoData.csv")
 yapoData$X <- NULL
 yapoData$source <- "Yapo"
 
-chileautosData <- read.csv("chileautosData.csv")
+chileautosData <- read.csv("data/chileautosData.csv")
 chileautosData$X <- NULL
 chileautosData$source <- "Chileautos"
 
@@ -66,7 +66,8 @@ plt3 <- ggplot(cleanCarData, aes(x = Precio.USD, col = source)) +
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank())
 
-marrangeGrob(list(plt1, plt2, plt3), ncol = 3, nrow = 1)
+pltAll <- marrangeGrob(list(plt1, plt2, plt3), ncol = 3, nrow = 1)
+print(pltAll)
 
 dev.new()
 plt <- ggplot(cleanCarData, aes(x = Edad, y = Kilómetros)) + 
@@ -146,6 +147,7 @@ depr.estimates = data.frame(model = rownames(mem.coefs3),
                             row.names = 1)
 print("Depreciation (% / year) Depreciation (% / 10.000km)")
 print(depr.estimates)
+save(fit.mem3, file = "data/fittedLmer.RData")
 
 dev.new()
 model.plots <- list()
@@ -164,29 +166,39 @@ for (model_ in availableModels) {
   model.plots <- c(model.plots, list(model.plot))
 }
 
-marrangeGrob(grobs = as.list(model.plots), 
+plt <- marrangeGrob(grobs = as.list(model.plots), 
              ncol = 2, 
              nrow = ceiling(length(availableModels) / 2))
+print(plt)
+
+#
+# price ~ mileage and edad
+#
+
+# Kilómetros  ~ Age | model
+fit.km.vs.age = lmer(Kilómetros.miles ~ 1 + Edad +  +  (1 + Edad | model), cleanCarData)
+print(summary(fit.km.vs.age))
+save(fit.km.vs.age, file = "data/fittedKmVsAge.RData")
+
 
 #
 # Fair price predictor
 #
 getFairPrice <- function(model, year, km) {
-  currentYear = as.integer(format(Sys.Date(), "%Y"))
-  age = currentYear - year
+  age = getCurrentYear() - year
   model.coefs = mem.coefs3[model, ]
-  log.estimate =  model.coefs$`(Intercept)` + model.coefs$Edad * age + model.coefs$Kilómetros.miles * km / 1000
+  log.estimate =  model.coefs$`(Intercept)` + model.coefs$Edad * age + model.coefs$Kilómetros.miles * (km / 1000)
   return(10^log.estimate)
 }
 
 whatCanIAfford <- function(budget, pc = 10) {
   budgetMax <- budget * (1 + pc / 100)
   budgetMin <- budget * (1 - pc / 100)
-  results <- list()
+  results <- data.frame(stringsAsFactors = FALSE)
   for (model in rownames(mem.coefs3)) {
     ageMax <- (log10(budgetMax) - mem.coefs3[model, "(Intercept)"]) / mem.coefs3[model, "Edad"]
     ageMin <- (log10(budgetMin) - mem.coefs3[model, "(Intercept)"]) / mem.coefs3[model, "Edad"]
-    results <- c(results, list(model = model, yearMin = 2016 - ageMax, yearMax = 2016 - ageMin))
+    results <- rbind(results, data.frame(model = model, yearMin = 2016 - ageMax, yearMax = 2016 - ageMin, stringsAsFactors = FALSE))
   }
   return(results)
 }
