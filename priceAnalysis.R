@@ -5,11 +5,11 @@ require(ggplot2)
 require(gridExtra)
 require(lme4)
 
-yapoData <- read.csv("data/yapoData.csv", stringsAsFactors = FALSE)
+yapoData <- read.csv("data/yapoData.csv")
 yapoData$X <- NULL
 yapoData$source <- "Yapo"
 
-chileautosData <- read.csv("data/chileautosData.csv", stringsAsFactors = FALSE)
+chileautosData <- read.csv("data/chileautosData.csv")
 chileautosData$X <- NULL
 chileautosData$source <- "Chileautos"
 
@@ -17,7 +17,7 @@ chileautosData$source <- "Chileautos"
 carData <- rbind(yapoData, chileautosData)
 
 # data cleaning:
-# 1) Remove entries with 0 kilómetros
+# 1) Remove entries with silly kilómetros
 minKm = 10
 maxKm = 5e5
 cleanCarData = subset(carData, carData$Kilómetros > minKm & carData$Kilómetros < maxKm)

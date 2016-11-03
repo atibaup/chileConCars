@@ -270,8 +270,8 @@ fetchChileautosCarFeatures <- function(caCarPageUrl) {
     cleanFuel <- NA
   }
   if (!is.na(transmission)) {
-    if (transmission == 'Automático') {
-      cleanTransmision <- 'Automático'
+    if (transmission == 'Automática') {
+      cleanTransmission <- 'Automático'
     } else {
       cleanTransmission <- transmission
     }
