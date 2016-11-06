@@ -80,7 +80,7 @@ getCarsByBudgetRanked <- function(budgetMin, budgetMax, fitted.lmer, updateProgr
     carsByBudget$URL.link = sapply(rownames(carsByBudget), createURL.link)
     #btsrp <- bootMer(fitted.lmer, function(x) 10^predict(x, newdata = carsByBudget), nsim = 100)
     #carsByBudget$Precio.USD.Predicted1stQ <- apply(btsrp$t, 2, function(x) quantile(x, 0.25, na.rm=TRUE))
-    carsByBudget$Delta <- carsByBudget$Precio.USD.Predicted - carsByBudget$Precio.USD
+    carsByBudget$Delta <- round(carsByBudget$Precio.USD.Predicted - carsByBudget$Precio.USD)
     carsByBudget$Precio.M.Pesos <- carsByBudget$Precio / 10^6
     
     sortedCarsByBudget <- carsByBudget[with(carsByBudget, order(-Delta)), ]
