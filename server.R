@@ -3,10 +3,10 @@ source("scrapingLib.R")
 load("data/fittedLmer.RData")
 load("data/fittedKmVsAge.RData")
 
-yapoData <- read.csv("data/yapoData.csv", stringsAsFactors = FALSE)
+yapoData <- read.csv("data/yapoData.csv")
 yapoData$X <- NULL
 
-chileautosData <- read.csv("data/chileautosData.csv", stringsAsFactors = FALSE)
+chileautosData <- read.csv("data/chileautosData.csv")
 chileautosData$X <- NULL
 
 GLOBAL.CACHE <- rbind(yapoData, chileautosData)
@@ -70,7 +70,7 @@ getCarsByBudgetRanked <- function(budgetMin, budgetMax, fitted.lmer, updateProgr
     # Impute mileages that are missing or aberrant
     missingOrAberrant <- with(carsByBudget, is.na(Kilómetros) | Kilómetros == 0)
     carsByBudget$Kilómetros.miles[missingOrAberrant] <- predict(fit.km.vs.age, newData = carsByBudget[missingOrAberrant, ])
-    carsByBudget$Precio.USD.Predicted <- 10^predict(fitted.lmer, newdata = carsByBudget)
+    carsByBudget$Precio.USD.Predicted <- 10^predict(fitted.lmer, newdata = carsByBudget, allow.new.levels = TRUE)
     createURL.link = function(rowID) {
       sprintf("<a href=%s target=\"_blank\">%s %s</a>", carsByBudget[rowID, ]$URL, carsByBudget[rowID, ]$make, carsByBudget[rowID, ]$model)
     }

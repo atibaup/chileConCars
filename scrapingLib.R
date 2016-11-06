@@ -407,7 +407,7 @@ yapoBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeCode = 
                             list(make = 'Mitsubishi', model = 'Montero', makeCode = 62, modelCode = 11),
                             list(make = 'Suzuki', model = 'GrandVitara', makeCode = 86, modelCode = 15),
                             list(make = 'Suzuki', model = 'GrandNomade', makeCode = 86, modelCode =14),
-                            list(make = 'Honda', model = 'CR-V', makeCode = 86, modelCode =14))
+                            list(make = 'Honda', model = 'CR-V', makeCode = 39, modelCode = 5))
 
 chileautosBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeCode = 4, modelCode = '4Runner'),
                                   list(make = 'Toyota', model = 'LandCruiser', makeCode = 4, modelCode = 'Land Cruiser'),
@@ -416,5 +416,5 @@ chileautosBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeC
                                   list(make = 'Mitsubishi', model = 'Montero', makeCode = 3, modelCode = 'Montero'),
                                   list(make = 'Suzuki', model = 'GrandVitara', makeCode = 9, modelCode = 'Grand Vitara'),
                                   list(make = 'Suzuki', model = 'GrandNomade', makeCode = 9, modelCode = 'Grand Nomade'),
-                                  list(make = 'Honda', model = 'CR-V', makeCode = 86, modelCode =14))
+                                  list(make = 'Honda', model = 'CR-V', makeCode = 21, modelCode = 'CRV'))
 

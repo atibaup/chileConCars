@@ -69,13 +69,11 @@ plt3 <- ggplot(cleanCarData, aes(x = Precio.USD, col = source)) +
 pltAll <- marrangeGrob(list(plt1, plt2, plt3), ncol = 3, nrow = 1)
 print(pltAll)
 
-dev.new()
 plt <- ggplot(cleanCarData, aes(x = Edad, y = Kilómetros)) + 
   geom_point() + 
   geom_smooth(method = "lm") 
 print(plt)
 
-dev.new()
 plt <- ggplot(cleanCarData, aes(x = Kilómetros.miles, y = log10(Precio.USD))) + 
   geom_point() + 
   geom_smooth(method = "lm") + 
@@ -149,7 +147,6 @@ print("Depreciation (% / year) Depreciation (% / 10.000km)")
 print(depr.estimates)
 save(fit.mem3, file = "data/fittedLmer.RData")
 
-dev.new()
 model.plots <- list()
 for (model_ in availableModels) {
   model.slope <- mem.coefs3[model_, ]$Edad
