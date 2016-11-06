@@ -1,3 +1,6 @@
+# Copyright 2016 - Arnau Tibau-Puig
+# This program is distributed under a GNU General Public License 
+
 library(shiny)
 source("scrapingLib.R")
 load("data/fittedLmer.RData")
@@ -77,8 +80,10 @@ getCarsByBudgetRanked <- function(budgetMin, budgetMax, fitted.lmer, updateProgr
     carsByBudget$URL.link = sapply(rownames(carsByBudget), createURL.link)
     #btsrp <- bootMer(fitted.lmer, function(x) 10^predict(x, newdata = carsByBudget), nsim = 100)
     #carsByBudget$Precio.USD.Predicted1stQ <- apply(btsrp$t, 2, function(x) quantile(x, 0.25, na.rm=TRUE))
-    carsByBudget$Ganga <- carsByBudget$Precio.USD.Predicted - carsByBudget$Precio.USD
-    sortedCarsByBudget <- carsByBudget[with(carsByBudget, order(-Ganga)), ]
+    carsByBudget$Delta <- carsByBudget$Precio.USD.Predicted - carsByBudget$Precio.USD
+    carsByBudget$Precio.M.Pesos <- carsByBudget$Precio / 10^6
+    
+    sortedCarsByBudget <- carsByBudget[with(carsByBudget, order(-Delta)), ]
     return(sortedCarsByBudget)
   } else {
     return(NULL)
@@ -115,6 +120,8 @@ shinyServer(function(input, output) {
     ranking <- subset(ranking, Año >= as.numeric(input$yearRange[1]) & Año <= as.numeric(input$yearRange[2]))
     ranking <- subset(ranking, Kilómetros >= as.numeric(input$kmRange[1]) & Kilómetros <= as.numeric(input$kmRange[2]))
     
-    ranking[, c( "URL.link", "Año", "Kilómetros", "Precio.USD", "Nombre", "Fecha", "Ganga")]
+    subset <- ranking[, c( "URL.link", "Año", "Kilómetros", "Precio.USD", "Precio.M.Pesos", "Nombre", "Fecha", "Delta")]
+    colnames(subset) <- c("URL", "Año", "Km", "USD", "Pesos (Millones)", "Descripción", "Publicado", "Delta")
+    subset
   }, escape = FALSE)
 })

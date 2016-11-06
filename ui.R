@@ -1,10 +1,12 @@
+# Copyright 2016 - Arnau Tibau-Puig
+# This program is distributed under a GNU General Public License 
 source("scrapingLib.R")
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage(
   
   # Application title
-  titlePanel("ChileConCars"),
+  titlePanel("ChileConCars - Copyright Arnau Tibau-Puig 2016"),
   
   sidebarLayout(
     sidebarPanel(
