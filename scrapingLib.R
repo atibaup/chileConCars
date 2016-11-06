@@ -1,26 +1,37 @@
 # Copyright 2016 - Arnau Tibau-Puig
 # This program is distributed under a GNU General Public License  
 require(rvest)
-require(curl)
+require(RCurl)
 
 MOZILLA.MAC.USER.AGENT <- paste("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)",
                              "AppleWebKit/534.30 (KHTML, like Gecko)", 
                              "Chrome/12.0.742.112 Safari/534.30", sep='')
 
+# 
+# Source proxy settings. A list with entries:
+#
+# proxy.opts <- list(
+#   proxy         = "123.456.789.012", 
+#   proxyport     = 8080,
+#   proxyusername = "user",
+#   proxypassword = "password"
+# )
+source("proxySettings.R")
+
 CHP2USD = 0.00152898
-SLEEP.TIME <- 0.2
+SLEEP.TIME <- 0.5
 
 getHtmlDocument <- function(url, userAgent = MOZILLA.MAC.USER.AGENT) {
-  h <- new_handle()
-  handle_setheaders(h, "User-Agent" = userAgent)
   encodedUrl <- URLencode(url)
-  req <- curl_fetch_memory(encodedUrl, handle=h)
-  if (req$status_code == 200) {
-    html <- read_html(req$content)
-    handle_reset(h)
-    return(html)
+  h <- basicHeaderGatherer()
+  html <- getURL(encodedUrl,
+                 .opts = proxy.opts,
+                 httpheader = c('User-Agent' = userAgent),
+                 headerfunction = h$update)
+  if (h$value()["status"] == "200") {
+    return(read_html(html))
   } else {
-    warning(sprintf("Trying to fetch %s returned status: %d", encodedUrl, req$status_code))
+    warning(sprintf("Trying to fetch %s returned status: %d", encodedUrl, h$value()$status))
   }
 }
 
@@ -395,7 +406,8 @@ yapoBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeCode = 
                             list(make = 'Nissan', model = 'X-Trail', makeCode = 64, modelCode = 45),
                             list(make = 'Mitsubishi', model = 'Montero', makeCode = 62, modelCode = 11),
                             list(make = 'Suzuki', model = 'GrandVitara', makeCode = 86, modelCode = 15),
-                            list(make = 'Suzuki', model = 'GrandNomade', makeCode = 86, modelCode =14))
+                            list(make = 'Suzuki', model = 'GrandNomade', makeCode = 86, modelCode =14),
+                            list(make = 'Honda', model = 'CR-V', makeCode = 86, modelCode =14))
 
 chileautosBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeCode = 4, modelCode = '4Runner'),
                                   list(make = 'Toyota', model = 'LandCruiser', makeCode = 4, modelCode = 'Land Cruiser'),
@@ -403,5 +415,6 @@ chileautosBrandModelCodes <- list(list(make = 'Toyota', model = '4Runner', makeC
                                   list(make = 'Nissan', model = 'X-Trail', makeCode = 17, modelCode = 'X-Trail'),
                                   list(make = 'Mitsubishi', model = 'Montero', makeCode = 3, modelCode = 'Montero'),
                                   list(make = 'Suzuki', model = 'GrandVitara', makeCode = 9, modelCode = 'Grand Vitara'),
-                                  list(make = 'Suzuki', model = 'GrandNomade', makeCode = 9, modelCode = 'Grand Nomade'))
+                                  list(make = 'Suzuki', model = 'GrandNomade', makeCode = 9, modelCode = 'Grand Nomade'),
+                                  list(make = 'Honda', model = 'CR-V', makeCode = 86, modelCode =14))
 
