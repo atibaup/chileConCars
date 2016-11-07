@@ -12,7 +12,7 @@ shinyUI(fluidPage(
     sidebarPanel(
       #textInput('budget', "Input your budget in USD", value = "5000"),
       sliderInput("range", 
-                  label = "Budget range:",
+                  label = "Budget range (USD)",
                   min = 0, max = 15000, value = c(7000, 8000),
                   step = 500, round = TRUE),
       sliderInput("kmRange", 

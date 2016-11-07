@@ -48,9 +48,7 @@ getChileautosCarsByFilter <- function(filter = list(), modelInfos = chileautosBr
   }
 }
 
-getCarsByBudget <- function(budgetMin, budgetMax, updateProgress = NULL) {
-  filter <- list(maxPrice = budgetMax / CHP2USD, 
-                 minPrice = budgetMin / CHP2USD)
+getCarsByBudget <- function(filter, updateProgress = NULL) {
   
   yapoData <- getYapoCarsByFilter(filter, updateProgress = updateProgress)
   chileautosCarData <- getChileautosCarsByFilter(filter, updateProgress = updateProgress)
@@ -67,12 +65,12 @@ getCarsByBudget <- function(budgetMin, budgetMax, updateProgress = NULL) {
   return(carData)
 }
 
-getCarsByBudgetRanked <- function(budgetMin, budgetMax, fitted.lmer, updateProgress = NULL) {
-  carsByBudget <- getCarsByBudget(budgetMin, budgetMax, updateProgress)
+getCarsByBudgetRanked <- function(filter, fitted.lmer, updateProgress = NULL) {
+  carsByBudget <- getCarsByBudget(filter, updateProgress)
   if (!is.null(carsByBudget)) {
     # Impute mileages that are missing or aberrant
     missingOrAberrant <- with(carsByBudget, is.na(Kilómetros) | Kilómetros == 0)
-    carsByBudget$Kilómetros.miles[missingOrAberrant] <- predict(fit.km.vs.age, newData = carsByBudget[missingOrAberrant, ])
+    carsByBudget$Kilómetros.miles[missingOrAberrant] <- predict(fit.km.vs.age, newdata = subset(carsByBudget, missingOrAberrant))
     carsByBudget$Precio.USD.Predicted <- 10^predict(fitted.lmer, newdata = carsByBudget, allow.new.levels = TRUE)
     createURL.link = function(rowID) {
       sprintf("<a href=%s target=\"_blank\">%s %s</a>", carsByBudget[rowID, ]$URL, carsByBudget[rowID, ]$make, carsByBudget[rowID, ]$model)
@@ -112,8 +110,11 @@ shinyServer(function(input, output) {
       progress$set(value = value, detail = detail)
     }
     
-    ranking <- getCarsByBudgetRanked(budgetMin = as.numeric(input$range[1]), 
-                                     budgetMax = as.numeric(input$range[2]), 
+    filter <- list(maxPrice = as.numeric(input$range[2]) / CHP2USD, 
+                   minPrice = as.numeric(input$range[1]) / CHP2USD,
+                   maxKm = as.numeric(input$kmRange[2]))
+    
+    ranking <- getCarsByBudgetRanked(filter, 
                                      fit.mem3, 
                                      updateProgress = updateProgress)
     
