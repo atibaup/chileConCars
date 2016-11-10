@@ -3,7 +3,7 @@
 
 library(shiny)
 source("scrapingLib.R")
-load("data/fittedLmer.RData")
+load("data/fittedSmoothLmer.RData")
 load("data/fittedKmVsAge.RData")
 
 yapoData <- read.csv("data/yapoData.csv")
@@ -115,7 +115,7 @@ shinyServer(function(input, output) {
                    maxKm = as.numeric(input$kmRange[2]))
     
     ranking <- getCarsByBudgetRanked(filter, 
-                                     fit.mem3, 
+                                     fit.mem4, 
                                      updateProgress = updateProgress)
     
     ranking <- subset(ranking, Año >= as.numeric(input$yearRange[1]) & Año <= as.numeric(input$yearRange[2]))
