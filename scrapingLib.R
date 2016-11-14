@@ -51,7 +51,7 @@ assignOrRbind <- function(oldData, newData) {
   if (is.null(oldData)) {
     oldData <- newData
   } else if (!is.null(newData)){
-    oldData <- rbind(oldData, newData)
+    oldData <- rbind(oldData, newData, stringsAsFactors = FALSE)
   }
   return(oldData)
 }
@@ -86,7 +86,7 @@ fetchYapoCarFeatures <- function(yapoCarPageUrl) {
   yapoCarDateMatch <- grep("[0-9]{4}-[0-9]{2}-[0-9]{2}", yapoCarTimePosted, value = TRUE)
   if (length(yapoCarDateMatch) > 0) {
     yearMonthDay <- strsplit(substr(yapoCarDateMatch, 1, 10), "-")[[1]]
-    yapoCarDate <- sprintf("%s-%s-%s", yearMonthDay[3], yearMonthDay[2], yearMonthDay[1])
+    yapoCarDate <- paste(yearMonthDay, collapse = '-') #sprintf("%s-%s-%s", yearMonthDay[3], yearMonthDay[2], yearMonthDay[1])
   } else {
     yapoCarDate <- NA
   }
@@ -202,6 +202,9 @@ getYapoCarsDataFrameForModel <- function(modelInfo, filter = list(minPrice = NUL
     if (!is.null(filter$maxKm)) {
       url = paste(url, sprintf("&me=%d", filter$maxKm), sep = '')
     }
+    if (!is.null(filter$comunas)) {
+      url = paste(url, paste(mapply(function(x) sprintf("&cmn=%d", x), filter$comunas), sep='', collapse=''), sep='')
+    } 
     print(sprintf("List URL: %s", url))
     return(url)
   }
@@ -216,6 +219,10 @@ getYapoCarsDataFrameForModel <- function(modelInfo, filter = list(minPrice = NUL
   if (!is.null(carData)) {
     carData$make <- modelInfo$make
     carData$model <- modelInfo$model
+    if (!is.null(filter$fecha)) {
+      dateMinusFecha = strftime(Sys.Date() - filter$fecha, "%Y-%m-%d")
+      carData <- subset(carData, Fecha >= dateMinusFecha)
+    }
   }
   return(carData)
 }
@@ -261,7 +268,8 @@ fetchChileautosCarFeatures <- function(caCarPageUrl) {
     match <- grep("Publicado [0-9]{2}-[0-9]{2}-[0-9]{2}", s, value = TRUE)
     if (length(match) > 0) {
       parsedDate <- substr(strsplit(match, "Publicado ")[[1]][2], 1, 10)
-      return(parsedDate)
+      dayMonthYear = strsplit(parsedDate, "-")
+      return(paste(rev(dayMonthYear), collapse = '-'))
     } else {
       return(NA)
     }
@@ -355,6 +363,11 @@ getCleanChileautosCarsDataframe <- function(caResultPageUrl, maxResults = NULL, 
 }
 
 getChileautosCarsDataFrameForModel <- function(modelInfo, filter = list(minPrice = NULL, maxPrice = NULL, maxKm = NULL), cache = NULL) {
+  # chileautos doesn't expose Comuna or allow filtering by them, so if the filter
+  # is active we return nothing
+  if (!is.null(filter$comunas)) {
+    return(NULL)
+  } 
   getListUrl <- function(pageNumber) {
     chileautosListBaseUrl <- "http://www.chileautos.cl/cemagic.asp?disp=1&goo=0&sort=fd&region=13&maresp=%d&modelo=%s&pag=%d"
     url = sprintf(chileautosListBaseUrl, modelInfo$makeCode, modelInfo$modelCode, pageNumber)
@@ -392,6 +405,10 @@ getChileautosCarsDataFrameForModel <- function(modelInfo, filter = list(minPrice
   if (!is.null(carData)) {
     carData$make <- modelInfo$make
     carData$model <- modelInfo$model
+    if (!is.null(filter$fecha)) {
+      dateMinusFecha = strftime(Sys.Date() - filter$fecha, "%Y-%m-%d")
+      carData = subset(carData, Fecha >= dateMinusFecha)
+    }
   }
   return(carData)
 }

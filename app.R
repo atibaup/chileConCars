@@ -10,5 +10,5 @@
 #
 
 # Run the application 
-shinyApp("./", port=3838)
+shinyApp("./", port = 3838)
 

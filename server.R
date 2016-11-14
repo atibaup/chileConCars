@@ -6,13 +6,13 @@ source("scrapingLib.R")
 load("data/fittedSmoothLmer.RData")
 load("data/fittedKmVsAge.RData")
 
-yapoData <- read.csv("data/yapoData.csv")
+yapoData <- read.csv("data/yapoData.csv", stringsAsFactors = FALSE)
 yapoData$X <- NULL
 
-chileautosData <- read.csv("data/chileautosData.csv")
+chileautosData <- read.csv("data/chileautosData.csv", stringsAsFactors = FALSE)
 chileautosData$X <- NULL
 
-GLOBAL.CACHE <- rbind(yapoData, chileautosData)
+GLOBAL.CACHE <- rbind(yapoData, chileautosData, stringsAsFactors = FALSE)
 
 getYapoCarsByFilter <- function(filter = list(), modelInfos = yapoBrandModelCodes, updateProgress = NULL) {
   yapoCarData <- NULL
@@ -54,7 +54,7 @@ getCarsByBudget <- function(filter, updateProgress = NULL) {
   chileautosCarData <- getChileautosCarsByFilter(filter, updateProgress = updateProgress)
   
   if (!is.null(yapoData) & !is.null(chileautosCarData)) {
-    carData <- rbind(yapoData, chileautosCarData)
+    carData <- rbind(yapoData, chileautosCarData, stringsAsFactors = FALSE)
   } else if (!is.null(yapoData)) {
     carData <- yapoData
   } else if (!is.null(chileautosData)) {
@@ -67,20 +67,22 @@ getCarsByBudget <- function(filter, updateProgress = NULL) {
 
 getCarsByBudgetRanked <- function(filter, fitted.lmer, updateProgress = NULL) {
   carsByBudget <- getCarsByBudget(filter, updateProgress)
-  if (!is.null(carsByBudget)) {
+  if (!is.null(carsByBudget) & nrow(carsByBudget) > 0) {
     # Impute mileages that are missing or aberrant
     missingOrAberrant <- with(carsByBudget, is.na(Kilómetros) | Kilómetros == 0)
-    carsByBudget$Kilómetros.miles[missingOrAberrant] <- predict(fit.km.vs.age, newdata = subset(carsByBudget, missingOrAberrant))
+    if (any(missingOrAberrant)) {
+      carsByBudget$Kilómetros.miles[missingOrAberrant] <- predict(fit.km.vs.age, newdata = subset(carsByBudget, missingOrAberrant), allow.new.levels = TRUE)
+    }
     carsByBudget$Precio.USD.Predicted <- 10^predict(fitted.lmer, newdata = carsByBudget, allow.new.levels = TRUE)
     createURL.link = function(rowID) {
       sprintf("<a href=%s target=\"_blank\">%s %s</a>", carsByBudget[rowID, ]$URL, carsByBudget[rowID, ]$make, carsByBudget[rowID, ]$model)
     }
     carsByBudget$URL.link = sapply(rownames(carsByBudget), createURL.link)
-    #btsrp <- bootMer(fitted.lmer, function(x) 10^predict(x, newdata = carsByBudget), nsim = 100)
-    #carsByBudget$Precio.USD.Predicted1stQ <- apply(btsrp$t, 2, function(x) quantile(x, 0.25, na.rm=TRUE))
     carsByBudget$Delta <- round(carsByBudget$Precio.USD.Predicted - carsByBudget$Precio.USD)
     carsByBudget$Precio.M.Pesos <- carsByBudget$Precio / 10^6
     
+    carsByBudget <- subset(carsByBudget, Año >= filter$yrMin & Año <= filter$yrMax)
+    carsByBudget <- subset(carsByBudget, Kilómetros >= filter$minKm & Kilómetros <= filter$maxKm)
     sortedCarsByBudget <- carsByBudget[with(carsByBudget, order(-Delta)), ]
     return(sortedCarsByBudget)
   } else {
@@ -110,19 +112,37 @@ shinyServer(function(input, output) {
       progress$set(value = value, detail = detail)
     }
     
+    if (input$comunas == 0) {
+      comunas =  c(313, 315, 316, 323, 330, 346)
+    } else {
+      comunas = NULL
+    }
+    
+    if (input$fecha > -1) {
+      fecha = as.numeric(input$fecha)
+    } else {
+      fecha = NULL
+    }
+    
     filter <- list(maxPrice = as.numeric(input$range[2]) / CHP2USD, 
                    minPrice = as.numeric(input$range[1]) / CHP2USD,
-                   maxKm = as.numeric(input$kmRange[2]))
+                   maxKm = as.numeric(input$kmRange[2]),
+                   minKm = as.numeric(input$kmRange[1]),
+                   yrMin = as.numeric(input$yearRange[1]),
+                   yrMax = as.numeric(input$yearRange[2]),
+                   comunas = comunas,
+                   fecha = fecha)
     
     ranking <- getCarsByBudgetRanked(filter, 
                                      fit.mem4, 
                                      updateProgress = updateProgress)
     
-    ranking <- subset(ranking, Año >= as.numeric(input$yearRange[1]) & Año <= as.numeric(input$yearRange[2]))
-    ranking <- subset(ranking, Kilómetros >= as.numeric(input$kmRange[1]) & Kilómetros <= as.numeric(input$kmRange[2]))
-    
-    subset <- ranking[, c( "URL.link", "Año", "Kilómetros", "Precio.USD", "Precio.M.Pesos", "Nombre", "Fecha", "Delta")]
-    colnames(subset) <- c("URL", "Año", "Km", "USD", "Pesos (Millones)", "Descripción", "Publicado", "Delta")
+    if (!is.null(ranking)) {
+      subset <- ranking[, c( "URL.link", "Año", "Kilómetros", "Precio.USD", "Precio.M.Pesos", "Nombre", "Fecha", "Delta")]
+      colnames(subset) <- c("URL", "Año", "Km", "USD", "Pesos (Millones)", "Descripción", "Publicado", "Delta")
+    } else {
+      subset = ranking
+    }
     subset
   }, escape = FALSE)
 })

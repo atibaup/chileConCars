@@ -6,6 +6,7 @@ require(gridExtra)
 require(lme4)
 require(splines)
 library(merTools)
+require(gamm4)
 
 yapoData <- read.csv("data/yapoData.csv")
 yapoData$X <- NULL
@@ -39,6 +40,7 @@ print(sort(summary(cleanCarData$model), decreasing = TRUE))
 
 cleanCarData$Kilómetros.miles = cleanCarData$Kilómetros / 1000
 
+dev.new()
 plt1 <- ggplot(cleanCarData, aes(x = Kilómetros, col = source)) + 
   geom_histogram(aes(y = ..density..)) + 
   geom_density() + 

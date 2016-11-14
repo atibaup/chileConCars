@@ -23,6 +23,14 @@ shinyUI(fluidPage(
                   label = "Year range:",
                   min = 1990, max = getCurrentYear(), value = c(2000, 2010),
                   step = 1, round = TRUE),
+      selectInput("comunas",
+                  label = "Comunas",
+                  choices = list(`Condes, Vitacura, Reina, Barnechea, Nuñoa, Vitacura` = 0,
+                                 Todas = 1)),
+      selectInput("fecha",
+                  label = 'Publicados hace:',
+                  choices = list(`Un día` = 1, `Dos días` = 2, `Tres días` = 3, `Una semana` = 7, `Un mes` = 31, `Sin límite` = -1),
+                  selected = 7),
       submitButton("Get cars!")
     ),
     
