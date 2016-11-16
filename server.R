@@ -2,6 +2,7 @@
 # This program is distributed under a GNU General Public License 
 
 library(shiny)
+library(splines)
 source("scrapingLib.R")
 load("data/fittedSmoothLmer.RData")
 load("data/fittedKmVsAge.RData")

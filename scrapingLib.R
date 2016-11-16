@@ -269,7 +269,7 @@ fetchChileautosCarFeatures <- function(caCarPageUrl) {
     if (length(match) > 0) {
       parsedDate <- substr(strsplit(match, "Publicado ")[[1]][2], 1, 10)
       dayMonthYear = strsplit(parsedDate, "-")
-      return(paste(rev(dayMonthYear), collapse = '-'))
+      return(paste(rev(dayMonthYear)[[1]], collapse = '-'))
     } else {
       return(NA)
     }

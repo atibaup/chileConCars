@@ -210,11 +210,13 @@ par(mfrow = c(nRows, 2),
     mar = c(0,0,1,1) + 0.1)
 nPlot = 0
 sortedModels = rownames(depr.estimates)[order(depr.estimates$depr.year, decreasing = TRUE)]
+fit.gams.predictions = list()
 for (model_ in sortedModels) {
   model.data = subset(cleanCarData, model == model_)
   fit.gams = gam(log10(Precio.USD) ~ 1 + Transmisión +
                     s(Edad) + Kilómetros.miles, 
                   data=model.data)
+  fit.gams.predictions[[nPlot + 1]] = predict(fit.gams, new.data)
   age.points = seq(0, max(cleanCarData$Edad), by = 1)
   nPoints = length(age.points)
   new.data = data.frame(Edad = age.points, 
@@ -243,7 +245,13 @@ for (model_ in sortedModels) {
   box(which = "plot", lty = "solid")
   lines(new.data$Edad, 10^predict(fit.mem3, new.data), col = 'green', type = 'o')
   lines(new.data$Edad, 10^predict(fit.mem4, new.data), col = 'blue', type = 'o')
-  lines(new.data$Edad, 10^predict(fit.gams, new.data), col = 'red', type = 'o')
+  lines(new.data$Edad, 10^fit.gams.predictions[[nPlot + 1]], col = 'red', type = 'o')
+  if (nPlot == 0) {
+    legend("topright", 
+           legend = c("Log-linear MEM", "Spline log-linear MEM", "GAM"),
+           col = c("green", "blue", "red"),
+           lty = c(1, 1, 1))
+  }
   # fit.mem3.ci <- predictInterval(fit.mem3, new.data)
   # fit.mem4.ci <- predictInterval(fit.mem4, new.data)
   # 
@@ -274,8 +282,7 @@ for (model_ in sortedModels) {
                         Kilómetros.miles = predict(fit.km.vs.age, 
                                                    newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
   title <- sprintf("%s %.2f (%%/year)", model_, depr.estimates[model_, ]$depr.year)
-  prediction <- predict(fit.mem4, new.data)
-  diff.prediction <- c(NA, diff(prediction))
+  diff.prediction <- c(NA, diff(fit.gams.predictions[[nPlot + 1]]))
   pct.depreciation <- 100 * (1 - 10^(diff.prediction))
   plot(new.data$Edad, 
        pct.depreciation, 
@@ -301,6 +308,12 @@ for (model_ in sortedModels) {
   gam.diff.prediction <- c(NA, diff(gam.prediction))
   gam.pct.depreciation <- 100 * (1 - 10^(gam.diff.prediction))
   lines(new.data$Edad, gam.pct.depreciation, col = 'red', type = 'o')
+  if (nPlot == 0) {
+    legend("topright", 
+           legend = c("Log-linear MEM", "Spline log-linear MEM", "GAM"),
+           col = c("green", "blue", "red"),
+           lty = c(1, 1, 1))
+  }
   nPlot = nPlot + 1
 }
 
@@ -314,14 +327,43 @@ getFairPrice <- function(model, year, km) {
   return(10^log.estimate)
 }
 
-whatCanIAfford <- function(budget, pc = 10) {
+whatCanIAfford <- function(budget, fit = fit.mem4, pc = 10, maxAge = 20) {
   budgetMax <- budget * (1 + pc / 100)
   budgetMin <- budget * (1 - pc / 100)
   results <- data.frame(stringsAsFactors = FALSE)
-  for (model in rownames(mem.coefs3)) {
-    ageMax <- (log10(budgetMax) - mem.coefs3[model, "(Intercept)"]) / mem.coefs3[model, "Edad"]
-    ageMin <- (log10(budgetMin) - mem.coefs3[model, "(Intercept)"]) / mem.coefs3[model, "Edad"]
-    results <- rbind(results, data.frame(model = model, yearMin = 2016 - ageMax, yearMax = 2016 - ageMin, stringsAsFactors = FALSE))
+  age.points = seq(0, maxAge, by = 1)
+  nPoints = length(age.points)
+  currentYear = getCurrentYear()
+  for (model in availableModels) {
+    predicted.km.miles <- predict(fit.km.vs.age, 
+                                  newdata = data.frame(Edad = age.points, model = rep(model, nPoints)))
+    new.data <- data.frame(Edad = age.points, 
+                          Transmisión = rep("Automático", nPoints),
+                          Combustible = rep("Bencina", nPoints),
+                          model = rep(model, nPoints),
+                          Kilómetros.miles = predicted.km.miles)
+    price.vs.age = 10^predict(fit, newdata = new.data)
+    ageMax <- NULL
+    ageMin <- NULL
+    i <- 1
+    while (i <= nPoints & (is.null(ageMax) | is.null(ageMin))) {
+      if (price.vs.age[i] <= budgetMax) {
+        ageMin <- age.points[i]
+      }
+      if (price.vs.age[i] < budgetMin & i > 1) {
+        ageMax <- age.points[i - 1]
+      }
+      i =  i + 1
+    }
+    if (!is.null(ageMin) & !is.null(ageMax)) {
+      results <- rbind(results, 
+                       data.frame(model = model, 
+                                  years = sprintf("%d-%d", currentYear - ageMax, currentYear - ageMin), 
+                                  kms = sprintf("%d-%d",
+                                                1000 * round(predict(fit.km.vs.age, newdata = data.frame(Edad = ageMax, model = model))),
+                                                1000 * round(predict(fit.km.vs.age, newdata = data.frame(Edad = ageMin, model = model)))),
+                                  stringsAsFactors = FALSE))
+    }
   }
   return(results)
 }
