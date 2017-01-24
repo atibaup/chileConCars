@@ -1,6 +1,5 @@
 # Copyright 2016 - Arnau Tibau-Puig
 # This program is distributed under a GNU General Public License 
-source("scrapingLib.R")
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage(
@@ -25,7 +24,7 @@ shinyUI(fluidPage(
                   step = 1, round = TRUE),
       selectInput("comunas",
                   label = "Comunas",
-                  choices = list(`Condes, Vitacura, Reina, Barnechea, Nuñoa, Vitacura` = 0,
+                  choices = list(`Condes, Vitacura, Reina, Barnechea, Nuñoa, Providencia` = 0,
                                  Todas = 1)),
       selectInput("fecha",
                   label = 'Publicados hace:',

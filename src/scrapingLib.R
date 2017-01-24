@@ -8,7 +8,7 @@ MOZILLA.MAC.USER.AGENT <- paste("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)"
                              "Chrome/12.0.742.112 Safari/534.30", sep='')
 
 # 
-# Source proxy settings. A list with entries:
+# Source proxy settings. A filt containing a list with entries:
 #
 # proxy.opts <- list(
 #   proxy         = "123.456.789.012", 

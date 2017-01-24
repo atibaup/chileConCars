@@ -8,11 +8,11 @@ require(splines)
 library(merTools)
 require(gamm4)
 
-yapoData <- read.csv("data/yapoData.csv")
+yapoData <- read.csv("../data/yapoData.csv")
 yapoData$X <- NULL
 yapoData$source <- "Yapo"
 
-chileautosData <- read.csv("data/chileautosData.csv")
+chileautosData <- read.csv("../data/chileautosData.csv")
 chileautosData$X <- NULL
 chileautosData$source <- "Chileautos"
 
@@ -87,7 +87,7 @@ print(plt)
 # Kilómetros  ~ Age | model
 fit.km.vs.age = lmer(Kilómetros.miles ~ 1 + Edad + (1 + Edad | model), cleanCarData)
 print(summary(fit.km.vs.age))
-save(fit.km.vs.age, file = "data/fittedKmVsAge.RData")
+save(fit.km.vs.age, file = "../data/fittedKmVsAge.RData")
 
 
 # price  ~ Age | model
@@ -152,7 +152,7 @@ depr.estimates = data.frame(model = rownames(mem.coefs3),
 
 print("Depreciation (% / year) Depreciation (% / 10.000km)")
 print(depr.estimates)
-save(fit.mem3, file = "data/fittedLmer.RData")
+save(fit.mem3, file = "../data/fittedLmer.RData")
 
 model.plots <- list()
 for (model_ in availableModels) {
@@ -201,7 +201,7 @@ fit.mem4 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible +
                   (1 + bs(Edad, df = 5) | model), 
                 data=cleanCarData)
 
-save(fit.mem4, file = "data/fittedSmoothLmer.RData")
+save(fit.mem4, file = "../data/fittedSmoothLmer.RData")
 
 dev.new()
 nRows = ceiling(length(availableModels)/2)
@@ -216,7 +216,7 @@ for (model_ in sortedModels) {
   fit.gams = gam(log10(Precio.USD) ~ 1 + Transmisión +
                     s(Edad) + Kilómetros.miles, 
                   data=model.data)
-  fit.gams.predictions[[nPlot + 1]] = predict(fit.gams, new.data)
+  fit.gams.predictions[[nPlot + 1]] = predict(fit.gams, model.data)
   age.points = seq(0, max(cleanCarData$Edad), by = 1)
   nPoints = length(age.points)
   new.data = data.frame(Edad = age.points, 
@@ -224,7 +224,7 @@ for (model_ in sortedModels) {
                         Combustible = rep("Bencina", nPoints),
                         model = rep(model_, nPoints),
                         Kilómetros.miles = predict(fit.km.vs.age, 
-                                                   newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
+                                                   new.data = data.frame(Edad = age.points, model = rep(model_, nPoints))))
   scatterCol <- rgb(0, 0, 255, max = 255, alpha = 125)
   title <- sprintf("%s %.2f (%%/year)", model_, depr.estimates[model_, ]$depr.year)
   plot(model.data$Edad, model.data$Precio.USD, 
@@ -320,14 +320,24 @@ for (model_ in sortedModels) {
 #
 # Fair price predictor
 #
-getFairPrice <- function(model, year, km) {
+getFairPrice <- function(model, year, km, transmision = "Automático", combustible = "Bencina") {
   age = getCurrentYear() - year
-  model.coefs = mem.coefs3[model, ]
-  log.estimate =  model.coefs$`(Intercept)` + model.coefs$Edad * age + model.coefs$Kilómetros.miles * (km / 1000)
-  return(10^log.estimate)
+  new.data <- data.frame(Edad = age, 
+                         Transmisión = transmision,
+                         Combustible = combustible,
+                         model = model,
+                         Kilómetros.miles = km / 1000)
+  price.usd = 10^predict(fit.mem4, newdata = new.data)[[1]]
+  return(list(usd = price.usd, chp = price.usd / 0.0015))
 }
 
-whatCanIAfford <- function(budget, fit = fit.mem4, pc = 10, maxAge = 20) {
+whatCanIAfford <- function(budget, 
+                           transmision = "Automático", 
+                           combustible = "Bencina", 
+                           kilometros.miles = NULL,
+                           fit = fit.mem4, 
+                           pc = 10, 
+                           maxAge = 20) {
   budgetMax <- budget * (1 + pc / 100)
   budgetMin <- budget * (1 - pc / 100)
   results <- data.frame(stringsAsFactors = FALSE)
@@ -335,13 +345,18 @@ whatCanIAfford <- function(budget, fit = fit.mem4, pc = 10, maxAge = 20) {
   nPoints = length(age.points)
   currentYear = getCurrentYear()
   for (model in availableModels) {
-    predicted.km.miles <- predict(fit.km.vs.age, 
-                                  newdata = data.frame(Edad = age.points, model = rep(model, nPoints)))
+    if (is.null(kilometros.miles)) {
+      km.miles <- predict(fit.km.vs.age, 
+                          newdata = data.frame(Edad = age.points, model = rep(model, nPoints)))
+    } else {
+      km.miles <- rep(kilometros.miles, nPoints)
+    }
+    
     new.data <- data.frame(Edad = age.points, 
-                          Transmisión = rep("Automático", nPoints),
-                          Combustible = rep("Bencina", nPoints),
+                          Transmisión = rep(transmision, nPoints),
+                          Combustible = rep(combustible, nPoints),
                           model = rep(model, nPoints),
-                          Kilómetros.miles = predicted.km.miles)
+                          Kilómetros.miles = km.miles)
     price.vs.age = 10^predict(fit, newdata = new.data)
     ageMax <- NULL
     ageMin <- NULL

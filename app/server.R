@@ -3,14 +3,14 @@
 
 library(shiny)
 library(splines)
-source("scrapingLib.R")
-load("data/fittedSmoothLmer.RData")
-load("data/fittedKmVsAge.RData")
+source("../src/scrapingLib.R", chdir = TRUE)
+load("../data/fittedSmoothLmer.RData")
+load("../data/fittedKmVsAge.RData")
 
-yapoData <- read.csv("data/yapoData.csv", stringsAsFactors = FALSE)
+yapoData <- read.csv("../data/yapoData.csv", stringsAsFactors = FALSE)
 yapoData$X <- NULL
 
-chileautosData <- read.csv("data/chileautosData.csv", stringsAsFactors = FALSE)
+chileautosData <- read.csv("../data/chileautosData.csv", stringsAsFactors = FALSE)
 chileautosData$X <- NULL
 
 GLOBAL.CACHE <- rbind(yapoData, chileautosData, stringsAsFactors = FALSE)
