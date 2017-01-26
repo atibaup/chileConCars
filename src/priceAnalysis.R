@@ -8,7 +8,7 @@ require(splines)
 library(merTools)
 require(gamm4)
 
-yapoData <- read.csv("../data/yapoData.csv")
+yapoData <- read.csv("../data/yapoDataNew.csv")
 yapoData$X <- NULL
 yapoData$source <- "Yapo"
 
@@ -33,52 +33,88 @@ cleanCarData = subset(cleanCarData,
 # 3) Remove entries with bad year data
 cleanCarData = subset(cleanCarData, !(model == "4Runner" & Edad == 26 & Precio.USD > 10000))
 
+write.csv(cleanCarData, file = "../data/cleanCarData.csv")
+
 availableModels = unique(cleanCarData$model)
 
 # Show sample size per model
-print(sort(summary(cleanCarData$model), decreasing = TRUE))
+print(sort(round(summary(cleanCarData$model)/nrow(cleanCarData) *  100, 1), decreasing = TRUE))
+
+# Show sample size per transmission
+print(sort(round(summary(cleanCarData$Transmisión)/nrow(cleanCarData) *  100, 2), decreasing = TRUE))
+
+# Show sample size per combustible
+print(sort(round(summary(cleanCarData$Combustible)/nrow(cleanCarData) *  100, 2), decreasing = TRUE))
+
 
 cleanCarData$Kilómetros.miles = cleanCarData$Kilómetros / 1000
 
+
+textSize = 4
+
+#
+# Data exploration
+#
+
 dev.new()
-plt1 <- ggplot(cleanCarData, aes(x = Kilómetros, col = source)) + 
+
+# Sort facet_wrap by model's average Kilómetros
+kmByModel = aggregate(Kilómetros ~ model, cleanCarData, mean)
+sortedLevels = kmByModel[order(kmByModel$Kilómetros, decreasing = TRUE),]$model
+cleanCarData$model <- factor(cleanCarData$model, levels = sortedLevels)
+
+plt1 <- ggplot(cleanCarData, aes(x = Kilómetros)) + 
   geom_histogram(aes(y = ..density..)) + 
   geom_density() + 
   facet_wrap(~ model, nrow = length(availableModels), ncol = 1) + 
   theme(legend.position='none', 
-        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = textSize),
         axis.title.y=element_blank(),
+        axis.title.x = element_text(size = textSize),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())
+        axis.ticks.y=element_blank(),
+        strip.text.x = element_text(size = textSize, margin = margin(.01, 0, .01, 0, "cm")),
+        panel.margin = unit(c(0.1, 0, 0), "lines"))
 
-plt2 <- ggplot(cleanCarData, aes(x = Edad, col = source)) + 
+# Sort facet_wrap by model's average Edad
+edadByModel = aggregate(Edad ~ model, cleanCarData, mean)
+sortedLevels = edadByModel[order(edadByModel$Edad, decreasing = TRUE),]$model
+cleanCarData$model <- factor(cleanCarData$model, levels = sortedLevels)
+
+plt2 <- ggplot(cleanCarData, aes(x = Edad)) + 
   geom_histogram(aes(y = ..density..)) + 
   geom_density() + 
   facet_wrap(~ model, nrow = length(availableModels), ncol = 1) + 
   theme(legend.position='none', 
-        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = textSize),
         axis.title.y=element_blank(),
+        axis.title.x = element_text(size = textSize),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())
+        axis.ticks.y=element_blank(),
+        strip.text.x = element_text(size = textSize, margin = margin(.01, 0, .01, 0, "cm")),
+        panel.margin = unit(c(0.1,0,0), "lines"))
 
-plt3 <- ggplot(cleanCarData, aes(x = Precio.USD, col = source)) + 
+# Sort facet_wrap by model's average Precio.USD
+precioByModel = aggregate(Precio.USD ~ model, cleanCarData, mean)
+sortedLevels = precioByModel[order(precioByModel$Precio.USD, decreasing = TRUE),]$model
+cleanCarData$model <- factor(cleanCarData$model, levels = sortedLevels)
+
+plt3 <- ggplot(cleanCarData, aes(x = Precio.USD)) + 
   geom_histogram(aes(y = ..density..)) + 
   geom_density() + 
   facet_wrap(~ model, nrow = length(availableModels), ncol = 1) + 
   theme(legend.position='none', 
-        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = textSize),
+        axis.title.x = element_text(size = textSize),
         axis.title.y=element_blank(),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())
+        axis.ticks.y=element_blank(),
+        strip.text.x = element_text(size = textSize, margin = margin(.01, 0, .01, 0, "cm")),
+        panel.margin = unit(c(0.1,0,0), "lines"))
 
-pltAll <- marrangeGrob(list(plt1, plt2, plt3), ncol = 3, nrow = 1)
+pltAll <- marrangeGrob(list(plt1, plt2, plt3), top = "", ncol = 3, nrow = 1)
 print(pltAll)
-
-plt <- ggplot(cleanCarData, aes(x = Kilómetros.miles, y = log10(Precio.USD))) + 
-  geom_point() + 
-  geom_smooth(method = "lm") + 
-  facet_wrap(~ model)
-print(plt)
+ggsave("/Users/atibaup/atibaup.github.io/assets/summary.png", plot = pltAll, width = 6, height = 6, units = "cm")
 
 #
 # price ~ mileage and edad
@@ -123,6 +159,7 @@ mem.coefs2 = coef(fit.mem2)$model
 print("Depreciation (% / 10.000km)")
 print(cbind(rownames(mem.coefs2), 100 * (1 - 10^(mem.coefs2$Kilómetros.miles))))
 
+dev.new()
 model.plots <- list()
 for (model_ in availableModels) {
   model.slope <- mem.coefs2[model_, ]$Kilómetros.miles
@@ -216,7 +253,9 @@ for (model_ in sortedModels) {
   fit.gams = gam(log10(Precio.USD) ~ 1 + Transmisión +
                     s(Edad) + Kilómetros.miles, 
                   data=model.data)
-  fit.gams.predictions[[nPlot + 1]] = predict(fit.gams, model.data)
+  fit.loglin = lm(log10(Precio.USD) ~ 1 + Transmisión +
+                    Edad + Kilómetros.miles, 
+                  data=model.data)
   age.points = seq(0, max(cleanCarData$Edad), by = 1)
   nPoints = length(age.points)
   new.data = data.frame(Edad = age.points, 
@@ -224,7 +263,9 @@ for (model_ in sortedModels) {
                         Combustible = rep("Bencina", nPoints),
                         model = rep(model_, nPoints),
                         Kilómetros.miles = predict(fit.km.vs.age, 
-                                                   new.data = data.frame(Edad = age.points, model = rep(model_, nPoints))))
+                                                   newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
+  fit.gams.predictions[[nPlot + 1]] = predict(fit.gams, new.data)
+  
   scatterCol <- rgb(0, 0, 255, max = 255, alpha = 125)
   title <- sprintf("%s %.2f (%%/year)", model_, depr.estimates[model_, ]$depr.year)
   plot(model.data$Edad, model.data$Precio.USD, 
@@ -243,13 +284,14 @@ for (model_ in sortedModels) {
     axis(side = 2, labels = FALSE, tick = FALSE)
   }
   box(which = "plot", lty = "solid")
+  lines(new.data$Edad, 10^predict(fit.loglin, new.data), col = 'black', type = 'o')
   lines(new.data$Edad, 10^predict(fit.mem3, new.data), col = 'green', type = 'o')
   lines(new.data$Edad, 10^predict(fit.mem4, new.data), col = 'blue', type = 'o')
   lines(new.data$Edad, 10^fit.gams.predictions[[nPlot + 1]], col = 'red', type = 'o')
-  if (nPlot == 0) {
+  if (nPlot == 1) {
     legend("topright", 
-           legend = c("Log-linear MEM", "Spline log-linear MEM", "GAM"),
-           col = c("green", "blue", "red"),
+           legend = c("Log-Linear", "Log-linear MEM", "Spline log-linear MEM", "GAM"),
+           col = c("black", "green", "blue", "red"),
            lty = c(1, 1, 1))
   }
   # fit.mem3.ci <- predictInterval(fit.mem3, new.data)
@@ -273,6 +315,9 @@ for (model_ in sortedModels) {
   fit.gams = gam(log10(Precio.USD) ~ 1 + Transmisión +
                    s(Edad) + Kilómetros.miles, 
                  data=model.data)
+  fit.loglin = lm(log10(Precio.USD) ~ 1 + Transmisión +
+                    Edad + Kilómetros.miles, 
+                      data=model.data)
   age.points = seq(0, max(cleanCarData$Edad), by = 1)
   nPoints = length(age.points)
   new.data = data.frame(Edad = age.points, 
@@ -282,11 +327,11 @@ for (model_ in sortedModels) {
                         Kilómetros.miles = predict(fit.km.vs.age, 
                                                    newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
   title <- sprintf("%s %.2f (%%/year)", model_, depr.estimates[model_, ]$depr.year)
-  diff.prediction <- c(NA, diff(fit.gams.predictions[[nPlot + 1]]))
+  diff.prediction <- c(NA, diff(predict(fit.mem4, new.data)))
   pct.depreciation <- 100 * (1 - 10^(diff.prediction))
   plot(new.data$Edad, 
        pct.depreciation, 
-       col = 'green', 
+       col = 'blue', 
        type = 'o',
        xlab='', 
        ylab='', 
@@ -303,15 +348,22 @@ for (model_ in sortedModels) {
     axis(side = 2, labels = FALSE, tick = FALSE)
   }
   box(which = "plot", lty = "solid")
-  lines(new.data$Edad, rep(depr.estimates[model_, ]$depr.year, nPoints), col = 'blue', type = 'o')
+  lines(new.data$Edad, rep(depr.estimates[model_, ]$depr.year, nPoints), col = 'green', type = 'o')
+  
   gam.prediction <- predict(fit.gams, new.data)
   gam.diff.prediction <- c(NA, diff(gam.prediction))
   gam.pct.depreciation <- 100 * (1 - 10^(gam.diff.prediction))
   lines(new.data$Edad, gam.pct.depreciation, col = 'red', type = 'o')
-  if (nPlot == 0) {
+  
+  loglin.prediction <- predict(fit.loglin, new.data)
+  loglin.diff.prediction <- c(NA, diff(loglin.prediction))
+  loglin.pct.prediction <- 100 * (1 - 10^(loglin.diff.prediction))
+  lines(new.data$Edad, loglin.pct.prediction, col = 'black', type = 'o')
+  
+  if (nPlot == 1) {
     legend("topright", 
-           legend = c("Log-linear MEM", "Spline log-linear MEM", "GAM"),
-           col = c("green", "blue", "red"),
+           legend = c("Log-linear", "Log-linear MEM", "Spline log-linear MEM", "GAM"),
+           col = c("black", "green", "blue", "red"),
            lty = c(1, 1, 1))
   }
   nPlot = nPlot + 1
