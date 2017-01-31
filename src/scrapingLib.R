@@ -8,18 +8,18 @@ MOZILLA.MAC.USER.AGENT <- paste("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)"
                              "Chrome/12.0.742.112 Safari/534.30", sep='')
 
 # 
-# Source proxy settings. A filt containing a list with entries:
+# Source proxy settings. A file containing a list with entries:
 #
 # proxy.opts <- list(
-#   proxy         = "123.456.789.012", 
+#   proxy         = "xxx.xxx.xxx.xxx", 
 #   proxyport     = 8080,
 #   proxyusername = "user",
 #   proxypassword = "password"
 # )
 source("proxySettings.R")
 
-CHP2USD = 0.00152898
-SLEEP.TIME <- 0.5
+CHP2USD = 0.00152898 # chilean peso to dollar conversion rate
+SLEEP.TIME <- 0.5 # 4 throttling the HTTP requests
 
 getHtmlDocument <- function(url, userAgent = MOZILLA.MAC.USER.AGENT) {
   encodedUrl <- URLencode(url)

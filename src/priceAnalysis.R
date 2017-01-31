@@ -7,6 +7,7 @@ require(lme4)
 require(splines)
 library(merTools)
 require(gamm4)
+require(lattice)
 
 yapoData <- read.csv("../data/yapoDataNew.csv")
 yapoData$X <- NULL
@@ -33,6 +34,9 @@ cleanCarData = subset(cleanCarData,
 # 3) Remove entries with bad year data
 cleanCarData = subset(cleanCarData, !(model == "4Runner" & Edad == 26 & Precio.USD > 10000))
 
+# 4) Remove entries with Combustible = "Gas" or "Otros" since they add up to 5 samples only
+cleanCarData = subset(cleanCarData, !(Combustible %in% c("Gas", "Otros")))
+
 write.csv(cleanCarData, file = "../data/cleanCarData.csv")
 
 availableModels = unique(cleanCarData$model)
@@ -41,11 +45,10 @@ availableModels = unique(cleanCarData$model)
 print(sort(round(summary(cleanCarData$model)/nrow(cleanCarData) *  100, 1), decreasing = TRUE))
 
 # Show sample size per transmission
-print(sort(round(summary(cleanCarData$Transmisión)/nrow(cleanCarData) *  100, 2), decreasing = TRUE))
+print(sort(round(summary(cleanCarData$Transmisión)/nrow(cleanCarData) *  100, 1), decreasing = TRUE))
 
 # Show sample size per combustible
-print(sort(round(summary(cleanCarData$Combustible)/nrow(cleanCarData) *  100, 2), decreasing = TRUE))
-
+print(sort(round(summary(cleanCarData$Combustible)/nrow(cleanCarData) *  100, 1), decreasing = TRUE))
 
 cleanCarData$Kilómetros.miles = cleanCarData$Kilómetros / 1000
 
@@ -133,25 +136,11 @@ mem.coefs = coef(fit.mem)$model
 print("Depreciation (% / year)")
 print(cbind(rownames(mem.coefs), 100 * (1 - 10^(mem.coefs$Edad))))
 
-# model.plots <- list()
-# for (model_ in availableModels) {
-#   model.slope <- mem.coefs[model_, ]$Edad
-#   model.intercept <- mem.coefs[model_, "(Intercept)"]
-#   model.data = subset(cleanCarData, model == model_)
-#   plot <- ggplot(model.data, aes(x = Edad, y = log10(Precio.USD))) + 
-#     geom_point() + 
-#     geom_smooth(method = "lm") + 
-#     geom_abline(slope = model.slope, intercept = model.intercept) +
-#     ggtitle(model_)
-#   model.plots <- c(model.plots, list(plot))
-# }
-# marrangeGrob(grobs = as.list(model.plots), 
-#              ncol = 2, 
-#              nrow = ceiling(length(availableModels) / 2))
-
+################################################################################################
 #
 # price ~ mileage
 #
+################################################################################################
 
 fit.mem2 = lmer(log10(Precio.USD) ~  1 + Kilómetros.miles + (1 | model), cleanCarData)
 print(summary(fit.mem2))
@@ -177,65 +166,92 @@ plt <- marrangeGrob(grobs = as.list(model.plots),
              nrow = ceiling(length(availableModels) / 2))
 print(plt)
 
-# price  ~ Age
+################################################################################################
+#
+# price ~ age + other covariates
+#
+################################################################################################
+
 fit.mem3 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible +
-                  Edad + Kilómetros.miles +  (1 + Edad | model), cleanCarData)
+                  Edad + (1 + Edad | model), 
+                cleanCarData)
 print(summary(fit.mem3))
 mem.coefs3 = coef(fit.mem3)$model
 depr.estimates = data.frame(model = rownames(mem.coefs3), 
                             depr.year = 100 * (1 - 10^(mem.coefs3$Edad)), 
-                            depr.dist = 100 * (1 - 10^(mem.coefs3$Kilómetros.miles)),
+                            #depr.dist = 100 * (1 - 10^(mem.coefs3$Kilómetros.miles)),
                             row.names = 1)
 
 print("Depreciation (% / year) Depreciation (% / 10.000km)")
 print(depr.estimates)
 save(fit.mem3, file = "../data/fittedLmer.RData")
 
-model.plots <- list()
-for (model_ in availableModels) {
+dev.new()
+nRows = ceiling(length(availableModels)/2)
+par(mfrow = c(nRows, 2),
+    oma = c(7,7,0,0) + 0.1,
+    mar = c(0,0,2,1) + 0.1)
+nPlot = 0
+sortedModels = rownames(depr.estimates)[order(depr.estimates$depr.year, decreasing = TRUE)]
+fit.fe = list()
+for (model_ in sortedModels) {
   model.slope <- mem.coefs3[model_, ]$Edad
   model.intercept <- mem.coefs3[model_, "(Intercept)"]
+  
   model.data = subset(cleanCarData, model == model_)
-  model.plot <- ggplot(model.data, aes(x = Edad, y = log10(Precio.USD))) + 
-    ylim(3.4, 4.8) +
-    geom_point() + 
-    geom_smooth(method = "lm") + 
-    geom_smooth(method = "loess") + 
-    geom_abline(slope = model.slope, intercept = model.intercept) +
-    ggtitle(sprintf("%s %.2f (%%/year)", model_, 
-                    depr.estimates[model_, ]$depr.year))
-  model.plots <- c(model.plots, list(model.plot))
+  
+  fit.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión + Edad, model.data)
+  print(summary(fit.fe[[model_]]))
+  model.slope.fe = coef(fit.fe[[model_]])["Edad"]
+  model.int.fe = coef(fit.fe[[model_]])["(Intercept)"]
+  depr.year.fe = 100 * (1 - 10^model.slope.fe)
+  age.points = seq(0, max(cleanCarData$Edad), by = 1)
+  nPoints = length(age.points)
+  
+  new.data = data.frame(Edad = age.points, 
+                        Transmisión = rep("Automático", nPoints),
+                        Combustible = rep("Bencina", nPoints),
+                        model = rep(model_, nPoints),
+                        Kilómetros.miles = predict(fit.km.vs.age, 
+                                                   newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
+
+  scatterCol <- rgb(0, 0, 255, max = 255, alpha = 125)
+  title <- sprintf("%s\n MEM: %.2f %%/yr FE: %.2f %%/yr", 
+                   model_, depr.estimates[model_, ], depr.year.fe)
+  plot(model.data$Edad, model.data$Precio.USD, 
+       axes = FALSE,
+       xlim = c(0, quantile(cleanCarData$Edad, .95)),
+       ylim = c((min((cleanCarData$Precio.USD))), (max((cleanCarData$Precio.USD)))),
+       main = title,
+       col = 'grey')
+  if (nPlot %% 2 == 0) {
+    axis(side = 2, labels = TRUE, tick = TRUE)
+    axis(side = 1, labels = FALSE, tick = FALSE, ylab = "Price (USD)")
+  }
+  if (nPlot == length(availableModels) - 2 | nPlot == length(availableModels) - 1) {
+    axis(side = 1, labels = TRUE, tick = TRUE)
+    axis(side = 2, labels = FALSE, tick = FALSE, xlab = "Age")
+  }
+  box(which = "plot", lty = "solid")
+  lines(new.data$Edad, 10^predict(fit.fe[[model_]], new.data), col = 'black', type = 'o')
+  lines(new.data$Edad, 10^predict(fit.mem3, new.data), col = 'green', type = 'o')
+  if (nPlot == 1) {
+    legend("topright", 
+           legend = c("Log-Linear", "Log-linear MEM"),
+           col = c("black", "green"),
+           lty = c(1, 1, 1))
+  }
+  nPlot = nPlot + 1
 }
 
-plt <- marrangeGrob(grobs = as.list(model.plots), 
-             ncol = 2, 
-             nrow = ceiling(length(availableModels) / 2))
-print(plt)
-
-shadeBetween <- function(x, y1, y2, ...) {
-  #plot(x, y1, col = 'black', type='l', ylim = c(min(c(y1, y2)), max(c(y1, y2))))
-  #lines(x, y2, col = 'black', type='l')
-  polygon(c(x, rev(x)), c(y2, rev(y1)), ...)
-}
-
-bootstrapped.CI <- function(fit, new.data, p = 0.10, nSim = 1000) {
-  sim <- bootMer(fit, 
-                 function(x) predict(x, newdata = new.data), 
-                 nsim = nSim, 
-                 .progress = "txt")
-  u.ci <- apply(sim$t, 2, function(x) quantile(x, p, na.rm = TRUE))
-  l.ci <- apply(sim$t, 2, function(x) quantile(x, 1-p, na.rm = TRUE))
-  return(cbind(new.data, data.frame(upr = u.ci, lwr = l.ci)))
-}
-
-makeTransparent <- function(color, alpha) {
-  col = col2rgb("green")
-  rgb(col[1], col[2], col[3], alpha = alpha * 255, maxColorValue = 255)
-}
+################################################################
+#
+# Non linear ones
+#
+################################################################
 
 fit.mem4 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible +
-                  bs(Edad, df = 5) + Kilómetros.miles +  
-                  (1 + bs(Edad, df = 5) | model), 
+                  bs(Edad, df = 5) + (1 + bs(Edad, df = 5) | model), 
                 data=cleanCarData)
 
 save(fit.mem4, file = "../data/fittedSmoothLmer.RData")
@@ -247,15 +263,16 @@ par(mfrow = c(nRows, 2),
     mar = c(0,0,1,1) + 0.1)
 nPlot = 0
 sortedModels = rownames(depr.estimates)[order(depr.estimates$depr.year, decreasing = TRUE)]
-fit.gams.predictions = list()
+fit.gams = list()
+fit.spline.fe = list()
 for (model_ in sortedModels) {
   model.data = subset(cleanCarData, model == model_)
-  fit.gams = gam(log10(Precio.USD) ~ 1 + Transmisión +
-                    s(Edad) + Kilómetros.miles, 
-                  data=model.data)
-  fit.loglin = lm(log10(Precio.USD) ~ 1 + Transmisión +
-                    Edad + Kilómetros.miles, 
-                  data=model.data)
+  fit.gams[[model_]] = gam(log10(Precio.USD) ~ 1 + Transmisión + 
+                             s(Edad), 
+                           data=model.data)
+  fit.spline.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión +
+                                   bs(Edad, df = 5), 
+                                 data=model.data)
   age.points = seq(0, max(cleanCarData$Edad), by = 1)
   nPoints = length(age.points)
   new.data = data.frame(Edad = age.points, 
@@ -264,17 +281,16 @@ for (model_ in sortedModels) {
                         model = rep(model_, nPoints),
                         Kilómetros.miles = predict(fit.km.vs.age, 
                                                    newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
-  fit.gams.predictions[[nPlot + 1]] = predict(fit.gams, new.data)
-  
+
   scatterCol <- rgb(0, 0, 255, max = 255, alpha = 125)
-  title <- sprintf("%s %.2f (%%/year)", model_, depr.estimates[model_, ]$depr.year)
   plot(model.data$Edad, model.data$Precio.USD, 
        xlab='', 
        ylab='', 
        axes = FALSE,
        xlim = c(0, quantile(cleanCarData$Edad, .95)),
        ylim = c((min(cleanCarData$Precio.USD)), (max(cleanCarData$Precio.USD))),
-       main = title)
+       main = model_,
+       col = 'grey')
   if (nPlot %% 2 == 0) {
     axis(side = 2, labels = TRUE, tick = TRUE)
     axis(side = 1, labels = FALSE, tick = FALSE)
@@ -284,22 +300,17 @@ for (model_ in sortedModels) {
     axis(side = 2, labels = FALSE, tick = FALSE)
   }
   box(which = "plot", lty = "solid")
-  lines(new.data$Edad, 10^predict(fit.loglin, new.data), col = 'black', type = 'o')
+  lines(new.data$Edad, 10^predict(fit.fe[[model_]], new.data), col = 'black', type = 'o')
   lines(new.data$Edad, 10^predict(fit.mem3, new.data), col = 'green', type = 'o')
-  lines(new.data$Edad, 10^predict(fit.mem4, new.data), col = 'blue', type = 'o')
-  lines(new.data$Edad, 10^fit.gams.predictions[[nPlot + 1]], col = 'red', type = 'o')
+  lines(new.data$Edad, 10^predict(fit.spline.fe[[model_]], new.data), col = 'blue', type = 'o')
+  lines(new.data$Edad, 10^predict(fit.mem4, new.data), col = 'red', type = 'o')
+  lines(new.data$Edad, 10^predict(fit.gams[[model_]], new.data), col = 'pink', type = 'o')
   if (nPlot == 1) {
     legend("topright", 
-           legend = c("Log-Linear", "Log-linear MEM", "Spline log-linear MEM", "GAM"),
-           col = c("black", "green", "blue", "red"),
+           legend = c("Log-Linear", "Log-linear MEM", "Spline log-linear", "Spline log-linear MEM", "GAM"),
+           col = c("black", "green", "blue", "red", "pink"),
            lty = c(1, 1, 1))
   }
-  # fit.mem3.ci <- predictInterval(fit.mem3, new.data)
-  # fit.mem4.ci <- predictInterval(fit.mem4, new.data)
-  # 
-  # shadeBetween(new.data$Edad, 10^fit.mem3.ci$lwr, 10^fit.mem3.ci$upr, col = makeTransparent("green", 0.1))
-  # shadeBetween(new.data$Edad, 10^fit.mem4.ci$lwr, 10^fit.mem4.ci$upr, col = makeTransparent("blue", 0.1))
-  # 
   nPlot = nPlot + 1
 }
 
@@ -312,12 +323,6 @@ nPlot = 0
 for (model_ in sortedModels) {
   print(model_)
   model.data = subset(cleanCarData, model == model_)
-  fit.gams = gam(log10(Precio.USD) ~ 1 + Transmisión +
-                   s(Edad) + Kilómetros.miles, 
-                 data=model.data)
-  fit.loglin = lm(log10(Precio.USD) ~ 1 + Transmisión +
-                    Edad + Kilómetros.miles, 
-                      data=model.data)
   age.points = seq(0, max(cleanCarData$Edad), by = 1)
   nPoints = length(age.points)
   new.data = data.frame(Edad = age.points, 
@@ -326,19 +331,18 @@ for (model_ in sortedModels) {
                         model = rep(model_, nPoints),
                         Kilómetros.miles = predict(fit.km.vs.age, 
                                                    newdata = data.frame(Edad = age.points, model = rep(model_, nPoints))))
-  title <- sprintf("%s %.2f (%%/year)", model_, depr.estimates[model_, ]$depr.year)
   diff.prediction <- c(NA, diff(predict(fit.mem4, new.data)))
   pct.depreciation <- 100 * (1 - 10^(diff.prediction))
   plot(new.data$Edad, 
        pct.depreciation, 
-       col = 'blue', 
+       col = 'red', 
        type = 'o',
        xlab='', 
        ylab='', 
        axes = FALSE,
        xlim = c(0, quantile(cleanCarData$Edad, .95)),
        ylim = c(0, 20),
-       main = title)
+       main = model_)
   if (nPlot %% 2 == 0) {
     axis(side = 2, labels = TRUE, tick = TRUE)
     axis(side = 1, labels = FALSE, tick = FALSE)
@@ -348,26 +352,44 @@ for (model_ in sortedModels) {
     axis(side = 2, labels = FALSE, tick = FALSE)
   }
   box(which = "plot", lty = "solid")
-  lines(new.data$Edad, rep(depr.estimates[model_, ]$depr.year, nPoints), col = 'green', type = 'o')
   
-  gam.prediction <- predict(fit.gams, new.data)
-  gam.diff.prediction <- c(NA, diff(gam.prediction))
-  gam.pct.depreciation <- 100 * (1 - 10^(gam.diff.prediction))
-  lines(new.data$Edad, gam.pct.depreciation, col = 'red', type = 'o')
-  
-  loglin.prediction <- predict(fit.loglin, new.data)
+  loglin.prediction <- predict(fit.fe[[model_]], new.data)
   loglin.diff.prediction <- c(NA, diff(loglin.prediction))
   loglin.pct.prediction <- 100 * (1 - 10^(loglin.diff.prediction))
   lines(new.data$Edad, loglin.pct.prediction, col = 'black', type = 'o')
   
+  lines(new.data$Edad, rep(depr.estimates[model_, ], nPoints), col = 'green', type = 'o')
+  
+  spline.loglin.prediction <- predict(fit.spline.fe[[model_]], new.data)
+  spline.loglin.diff.prediction <- c(NA, diff(spline.loglin.prediction))
+  spline.loglin.pct.prediction <- 100 * (1 - 10^(spline.loglin.diff.prediction))
+  lines(new.data$Edad, spline.loglin.pct.prediction, col = 'blue', type = 'o')
+  
+  gam.prediction <- predict(fit.gams[[model_]], new.data)
+  gam.diff.prediction <- c(NA, diff(gam.prediction))
+  gam.pct.depreciation <- 100 * (1 - 10^(gam.diff.prediction))
+  lines(new.data$Edad, gam.pct.depreciation, col = 'pink', type = 'o')
+  
   if (nPlot == 1) {
     legend("topright", 
-           legend = c("Log-linear", "Log-linear MEM", "Spline log-linear MEM", "GAM"),
-           col = c("black", "green", "blue", "red"),
+           legend = c("Log-linear", "Log-linear MEM", "Spline log-linear", "Spline log-linear MEM", "GAM"),
+           col = c("black", "green", "blue", "red", "pink"),
            lty = c(1, 1, 1))
   }
   nPlot = nPlot + 1
 }
+
+dev.new()
+plot(fit.mem3, type = c("p", "smooth"))
+
+dev.new()
+qqmath(fit.mem3, id = 0.5)
+
+dev.new()
+plot(fit.mem4, type = c("p", "smooth"))
+
+dev.new()
+qqmath(fit.mem4, id = 0.5)
 
 #
 # Fair price predictor
