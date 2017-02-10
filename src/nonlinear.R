@@ -22,6 +22,18 @@ availableModels = unique(cleanCarData$model)
 
 model.rows = c("Precio.USD", "Transmisión", "Combustible", "Edad")
 
+age.knots = quantile(cleanCarData$Edad, probs = c(1/3, 2/3))
+age.bndy = c(0, max(cleanCarData$Edad))
+
+bs.cols = data.frame(bs(cleanCarData$Edad, knots = age.knots, Boundary.knots = age.bndy))
+names(bs.cols) = c('bs.1', 'bs.2', 'bs.3', 'bs.4', 'bs.5')
+
+ns.cols = data.frame(ns(cleanCarData$Edad, knots = age.knots, Boundary.knots = age.bndy))
+names(ns.cols) = c('ns.1', 'ns.2', 'ns.3')
+
+cleanCarData = cbind(cleanCarData, bs.cols)
+cleanCarData = cbind(cleanCarData, ns.cols)
+
 trainIndx = createDataPartition(cleanCarData$model, p = 0.8, list = FALSE)
 trainData = cleanCarData[trainIndx, ]
 testData = cleanCarData[-trainIndx, ]
@@ -29,35 +41,15 @@ testData = cleanCarData[-trainIndx, ]
 trainData = trainData[complete.cases(trainData[, model.rows]), ]
 testData = testData[complete.cases(testData[, model.rows]), ]
 
-# train global models
-fit.mem3 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + Edad + (1 + Edad | model), 
-                trainData)
-save(fit.mem3, file = "../data/fittedLmer.RData")
-
-age.knots = quantile(cleanCarData$Edad, probs = c(1/3, 2/3))
-age.bndy = c(0, max(cleanCarData$Edad))
-
-fit.mem4 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + bs(Edad, knots = age.knots, Boundary.knots = age.bndy) + 
-                  (1 + bs(Edad, knots = age.knots, Boundary.knots = age.bndy) | model), 
-                data=trainData)
-
-save(fit.mem4, file = "../data/fittedSmoothLmer.RData")
-
-fit.mem.ns = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible +
-                    ns(Edad, knots = age.knots, Boundary.knots = age.bndy) + 
-                    (1 + ns(Edad, knots = age.knots, Boundary.knots = age.bndy) | model), 
-                  data=trainData)
-
-# train model-wise models
 fit.fe = list()
 fit.gams = list()
 fit.spline.fe = list()
 fit.ns.fe = list()
 
-model.names = c('fe', 'me', 'bs.fe', 'bs.me', 'ns.fe', 'ns.me', 'gams')
+model.names = c('fe', 'me', 'bs.fe', 'bs.me', 'bs.me*', 'ns.fe', 'ns.me', 'ns.me*', 'gams')
 avg.test.error = data.frame(row.names = c(model.names, 'n.samples'))
 avg.train.error = data.frame(row.names = c(model.names, 'n.samples'))
-nRndom = 5
+nRndom = 10
 for (n in 0:nRndom) {
   print(n)
   trainIndx = createDataPartition(cleanCarData$model, p = 0.8, list = FALSE)
@@ -70,17 +62,23 @@ for (n in 0:nRndom) {
   train.error = data.frame(row.names = c(model.names, 'n.samples'))
   test.error = data.frame(row.names = c(model.names, 'n.samples'))
   
-  fit.mem3 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + Edad + (1 + Edad | model), 
-                  trainData)
-  
-  fit.mem4 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + bs(Edad, knots = age.knots, Boundary.knots = age.bndy) + 
-                    (1 + bs(Edad, knots = age.knots, Boundary.knots = age.bndy) | model), 
+  fit.mem3 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + Edad + (1 + Edad | model), trainData)
+
+  fit.mem4 = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + bs.1 + bs.2 + bs.3 + bs.4 + bs.5 + 
+                    (1 + bs.1 + bs.2 + bs.3 + bs.4 + bs.5 | model), 
                   data=trainData)
   
-  fit.mem.ns = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible +
-                      ns(Edad, knots = age.knots, Boundary.knots = age.bndy) + 
-                      (1 + ns(Edad, knots = age.knots, Boundary.knots = age.bndy) | model), 
+  fit.mem4.ind = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + bs.1 + bs.2 + bs.3 + bs.4 + bs.5 + 
+                        (1 + bs.1 + bs.2 + bs.3 + bs.4 + bs.5 || model), 
+                      data=trainData)
+  
+  fit.mem.ns = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + ns.1 + ns.2 + ns.3 + 
+                      (1 + ns.1 + ns.2 + ns.3 | model), 
                     data=trainData)
+  
+  fit.mem.ns.ind = lmer(log10(Precio.USD) ~ 1 + Transmisión + Combustible + ns.1 + ns.2 + ns.3 +
+                          (1 + ns.1 + ns.2 + ns.3 || model), 
+                        data=trainData)
   
   for (model_ in availableModels) {
       
@@ -99,15 +97,17 @@ for (n in 0:nRndom) {
       
       fit.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión + Edad, data = model.train.data)
       fit.gams[[model_]] = gam(log10(Precio.USD) ~ 1 + Transmisión + s(Edad) , data = model.train.data)
-      fit.spline.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión + bs(Edad, knots = age.knots, Boundary.knots = age.bndy), data = model.train.data)
-      fit.ns.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión + ns(Edad, knots = age.knots, Boundary.knots = age.bndy), data = model.train.data)
+      fit.spline.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión + bs.1 + bs.2 + bs.3 + bs.4 + bs.5, data = model.train.data)
+      fit.ns.fe[[model_]] = lm(log10(Precio.USD) ~ 1 + Transmisión + ns.1 + ns.2 + ns.3, data = model.train.data)
       
       model.train.error = data.frame(c(train.mse(fit.fe[[model_]]), 
                                        train.mse(fit.mem3),
                                        train.mse(fit.spline.fe[[model_]]),
                                        train.mse(fit.mem4),
+                                       train.mse(fit.mem4.ind),
                                        train.mse(fit.ns.fe[[model_]]),
                                        train.mse(fit.mem.ns),
+                                       train.mse(fit.mem.ns.ind),
                                        train.mse(fit.gams[[model_]]),
                                        nrow(model.train.data)), 
                                      row.names = c(model.names, 'n.samples'))
@@ -116,8 +116,10 @@ for (n in 0:nRndom) {
                                       test.mse(fit.mem3),
                                       test.mse(fit.spline.fe[[model_]]),
                                       test.mse(fit.mem4),
+                                      test.mse(fit.mem4.ind),
                                       test.mse(fit.ns.fe[[model_]]),
                                       test.mse(fit.mem.ns),
+                                      test.mse(fit.mem.ns.ind),
                                       test.mse(fit.gams[[model_]]),
                                       nrow(model.test.data)), 
                                     row.names = c(model.names, 'n.samples'))
@@ -167,6 +169,15 @@ for (model_ in sortedModels) {
                         Combustible = rep("Bencina", nPoints),
                         model = rep(model_, nPoints))
   
+  new.bs.cols = data.frame(bs(new.data$Edad, knots = age.knots, Boundary.knots = age.bndy))
+  names(new.bs.cols) = c('bs.1', 'bs.2', 'bs.3', 'bs.4', 'bs.5')
+  
+  new.ns.cols = data.frame(ns(new.data$Edad, knots = age.knots, Boundary.knots = age.bndy))
+  names(new.ns.cols) = c('ns.1', 'ns.2', 'ns.3')
+  
+  new.data = cbind(new.data, new.bs.cols)
+  new.data = cbind(new.data, new.ns.cols)
+
   scatterCol <- rgb(0, 0, 255, max = 255, alpha = 125)
   plot(model.data$Edad, model.data$Precio.USD, 
        xlab='', 
@@ -189,15 +200,17 @@ for (model_ in sortedModels) {
   lines(new.data$Edad, 10^predict(fit.mem3, new.data), col = 'blue', type = 'o', pch=19)
   lines(new.data$Edad, 10^predict(fit.spline.fe[[model_]], new.data), col = 'red', type = 'o', pch=15)
   lines(new.data$Edad, 10^predict(fit.mem4, new.data), col = 'red', type = 'o', pch=19)
-  lines(new.data$Edad, 10^predict(fit.gams[[model_]], new.data), col = 'pink', type = 'o', pch=15)
+  lines(new.data$Edad, 10^predict(fit.mem4.ind, new.data), col = 'red', type = 'o', pch=25)
   lines(new.data$Edad, 10^predict(fit.ns.fe[[model_]], new.data), col = 'brown', type = 'o', pch=15)
   lines(new.data$Edad, 10^predict(fit.mem.ns, new.data), col = 'brown', type = 'o', pch=19)
+  lines(new.data$Edad, 10^predict(fit.mem.ns.ind, new.data), col = 'brown', type = 'o', pch=25)
+  lines(new.data$Edad, 10^predict(fit.gams[[model_]], new.data), col = 'pink', type = 'o', pch=15)
   
   if (nPlot == 1) {
     legend("topright", 
            legend = model.names,
-           col = c("blue", "blue", "red", "red", "brown", "brown", "pink"),
-           pch = c(15, 19, 15, 19, 15, 19, 15),
+           col = c("blue", "blue", "red", "red", "red", "brown", "brown", "brown", "pink"),
+           pch = c(15, 19, 15, 19, 25, 15, 19, 25, 15),
            lty = c(1, 1, 1))
   }
   nPlot = nPlot + 1
@@ -217,6 +230,7 @@ for (model_ in sortedModels) {
                         Transmisión = rep("Automático", nPoints),
                         Combustible = rep("Bencina", nPoints),
                         model = rep(model_, nPoints))
+  
   diff.prediction <- c(NA, diff(predict(fit.mem4, new.data)))
   pct.depreciation <- 100 * (1 - 10^(diff.prediction))
   plot(new.data$Edad, 
