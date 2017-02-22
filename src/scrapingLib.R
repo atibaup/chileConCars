@@ -61,7 +61,7 @@ divideBy1000IfPossible <- function(x) {
 }
 
 carFields <- c("Año", "Código", "Combustible", "Fecha", "Kilómetros", "Nombre", "Precio",
-               "Precio.anterior", "Tipo.de.vehículo", "Transmisión", "URL") 
+               "Precio.anterior", "Tipo.de.vehículo", "Transmisión", "URL", "IMG.URLs") 
 
 #
 # Yapo Scraper
@@ -91,6 +91,7 @@ fetchYapoCarFeatures <- function(yapoCarPageUrl) {
     yapoCarDate <- NA
   }
   yapoCarName <- carPageHtml %>% html_node(".title-details") %>% html_text()
+  yapoImgUrls <- unlist(lapply(carPageHtml %>% html_nodes(".thumb_image") %>% html_attr("src"), function(x) {gsub("thumbs", "images", x)}))
   # This is to throttle the requests so as to not make anyone angry
   Sys.sleep(SLEEP.TIME)
   rownames(yapoCarFeatures) <- yapoCarFeatures$X1
@@ -107,6 +108,7 @@ fetchYapoCarFeatures <- function(yapoCarPageUrl) {
                          Tipo.de.vehículo = cleanString(yapoCarFeatures["Tipo de vehículo", ]),
                          Combustible = cleanString(yapoCarFeatures["Combustible", ]),
                          Transmisión = cleanString(yapoCarFeatures["Transmisión (cambio)", ]),
+                         IMG.URLs = paste(yapoImgUrls, collapse=","),
                          stringsAsFactors = FALSE)
   if(!all(colnames(carTable) %in% carFields)) {
     stop("Missing fields!")
@@ -308,6 +310,7 @@ fetchChileautosCarFeatures <- function(caCarPageUrl) {
                          Tipo.de.vehículo = NA,
                          Combustible = cleanFuel,
                          Transmisión = cleanTransmission,
+                         IMG.URLs = NA,
                          stringsAsFactors = FALSE)
   if(!all(colnames(carTable) %in% carFields)) {
     stop("Missing fields!")

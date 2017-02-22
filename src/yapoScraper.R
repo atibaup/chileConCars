@@ -16,6 +16,11 @@ source("scrapingLib.R")
 opts <- docopt(doc)
 
 dataFolder <- opts$f
+
+if (!dir.exists(dataFolder)) {
+  dir.create(dataFolder)
+}
+
 dataFile <- paste(dataFolder, "/", opts$o, sep = '')
 
 if (opts$update & file.exists(dataFile)) {
@@ -25,18 +30,25 @@ if (opts$update & file.exists(dataFile)) {
   existingData <- NULL
 }
 
-carData <- NULL
+fileNames <- NULL
 for (modelInfo in yapoBrandModelCodes) {
   print(sprintf("Fetching data for %s %s", modelInfo$make, modelInfo$model))
-  newData <- getYapoCarsDataFrameForModel(modelInfo, cache = existingData)
-  if (is.null(carData)) {
-    carData <- newData
-  } else {
-    carData <- rbind(carData, newData)
-  }
+  carData <- getYapoCarsDataFrameForModel(modelInfo, filter = list(minPrice = 6500, maxPrice = 7000), cache = existingData)
+  modelFileName <- paste(dataFolder, "/", modelInfo$model, ".csv", sep = '')
+  write.csv(carData, file = modelFileName)
+  fileNames = c(fileNames, modelFileName)
 }
 
-if (!dir.exists(dataFolder)) {
-  dir.create(dataFolder)
+# Compile each's model csv and save
+carsData <- NULL
+for (fileName in fileNames) {
+  modelData <- tryCatch(read.csv(fileName, stringsAsFactors = FALSE), error = function(x) NULL)
+  if (!is.null(modelData)) {
+    if (is.null(carsData)){
+      carsData <- modelData
+    } else {
+      carsData <- rbind(carsData, modelData)
+    }
+  }
 }
-write.csv(carData, file = dataFile)
+write.csv(carsData, file = dataFile)
